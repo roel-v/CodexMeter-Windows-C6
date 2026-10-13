@@ -211,14 +211,17 @@ daemon 通过本地 Codex App Server 读取订阅余量：
 3. 发送 `initialized`
 4. 读取 `account/read`
 5. 读取 `account/rateLimits/read`
-6. 尝试读取 `account/usage/read`
 
 当前只处理 `codex` 限额桶：
 
 - 300 分钟窗口映射为 `5h`
 - 10080 分钟窗口映射为 `7d`
 
-`account/usage/read` 的 `dailyUsageBuckets` 用于计算今日和包含今日在内的近 7 个自然日 Token 数。服务端尚未生成当天桶时，daemon 会只读取本机 `~/.codex/sessions` 中的 `token_count` 事件，以累计值增量补出今日数据并加入近7天；这个实时回退只覆盖当前 Mac。服务端当天桶出现后会与本机值比较：差异小则使用账号级数据；差异同时达到 100 万 Token 和 25% 时，以本机今日值为准，并替换近7天合计中的当天部分。daemon 会在每日桶或数据源选择变化时记录 UTC/本地观察时间、最近的服务端桶、差值和最终数据源，便于后续判断服务端的自然日边界。该接口和本地事件均作为可选能力处理：不可用时限额刷新仍会继续，并优先保留上次成功取得的 Token 活动数据。
+“今日”和“近 7 天”Token 数统一统计当前 Mac 的本地记录，不混用服务端账号级 `dailyUsageBuckets`。近 7 天包含今天及之前 6 个本地自然日（例如 10 月 13 日显示 10 月 7 日至 13 日）；午夜自动移出最早一天。已归档聊天也纳入统计，扫描 `~/.codex/sessions` 和 `~/.codex/archived_sessions`，不包含其他电脑、云端任务或已删除的本地记录。
+
+新版日志优先统计 `token_usage_record.usage.total_tokens`，按 `response_id` 跨文件去重，包含上下文压缩请求；旧版日志使用 `token_count` 累计增量。分页历史（`history_base`）引用的旧会话累计值不会重新计入新文件。Token 数包含缓存输入，不等同于订阅额度消耗比例；`5h` / `7d` 订阅余量百分比仍来自账号限额接口。
+
+本地统计增量扫描文件，按日记录诊断合计。窗口内存在兼容记录时，没有记录的日期计为 0；本地记录不可用时不使用账号数据替代，限额刷新仍会继续，并保留上次成功取得的 Token 活动数据。
 
 daemon 不读取、不打印 Codex 登录 token。
 

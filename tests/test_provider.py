@@ -2,7 +2,6 @@ import asyncio
 import datetime as dt
 from unittest.mock import patch
 
-from codexmeter.app_server import AppServerError
 from codexmeter.limits import WINDOW_7D_MINS
 from codexmeter.provider import CodexUsageProvider
 
@@ -22,8 +21,6 @@ RATE_LIMITS = {
 
 
 class FakeClient:
-    fail_usage = False
-
     def __init__(self, *_args, **_kwargs):
         pass
 
@@ -41,97 +38,81 @@ class FakeClient:
             return {"account": {"type": "chatgpt"}}
         if method == "account/rateLimits/read":
             return RATE_LIMITS
-        if method == "account/usage/read":
-            if self.fail_usage:
-                raise AppServerError("token activity unavailable")
-            return {
-                "dailyUsageBuckets": [],
-                "summary": {"lifetimeTokens": 123},
-            }
+        # Token activity must never mix in account daily buckets.
         raise AssertionError(f"unexpected method: {method}")
 
 
 class FakeLocalUsageReader:
-    def read_today_tokens(self):
-        return 123
+    def read_daily_tokens(self, now):
+        return {
+            now.date() - dt.timedelta(days=i): 123 if i == 0 else 10
+            for i in range(7)
+        }
 
 
-class MismatchedUsageClient(FakeClient):
-    async def request(self, method, _params=None):
-        if method == "account/usage/read":
-            return {
-                "dailyUsageBuckets": [
-                    {"startDate": dt.date.today().isoformat(), "tokens": 4_313_694}
-                ]
-            }
-        return await super().request(method, _params)
-
-
-class LargeLocalUsageReader:
-    def read_today_tokens(self):
-        return 74_840_676
-
-
-def test_provider_fetches_optional_token_activity_without_inventing_h5():
-    FakeClient.fail_usage = False
+def test_provider_uses_same_local_scope_for_today_and_week():
     with patch("codexmeter.provider.JsonRpcClient", FakeClient):
         snapshot = asyncio.run(
             CodexUsageProvider(local_usage_reader=FakeLocalUsageReader()).fetch()
         )
-
     assert snapshot.h5_remaining_percent is None
     assert snapshot.d7_remaining_percent == 97
     assert snapshot.today_tokens == 123
-    assert snapshot.last_7d_tokens == 123
+    assert snapshot.last_7d_tokens == 183
 
 
-def test_provider_keeps_quota_when_token_activity_request_fails():
-    FakeClient.fail_usage = True
-    try:
-        with patch("codexmeter.provider.JsonRpcClient", FakeClient):
-            snapshot = asyncio.run(
-                CodexUsageProvider(local_usage_reader=FakeLocalUsageReader()).fetch()
-            )
-    finally:
-        FakeClient.fail_usage = False
+def test_provider_preserves_quotas_without_local_logs():
+    class UnavailableReader:
+        def read_daily_tokens(self, now):
+            return None
 
-    assert snapshot.h5_remaining_percent is None
+    with patch("codexmeter.provider.JsonRpcClient", FakeClient):
+        snapshot = asyncio.run(
+            CodexUsageProvider(local_usage_reader=UnavailableReader()).fetch()
+        )
     assert snapshot.d7_remaining_percent == 97
-    assert snapshot.today_tokens == 123
+    assert snapshot.today_tokens is None
     assert snapshot.last_7d_tokens is None
 
 
-def test_provider_logs_daily_bucket_diagnostics_only_when_buckets_change():
-    FakeClient.fail_usage = False
-    provider = CodexUsageProvider(local_usage_reader=FakeLocalUsageReader())
+def test_provider_preserves_quotas_when_local_scan_fails():
+    class FailingReader:
+        def read_daily_tokens(self, now):
+            raise OSError("unavailable")
 
+    with (
+        patch("codexmeter.provider.JsonRpcClient", FakeClient),
+        patch("codexmeter.provider.LOGGER.warning") as warning,
+    ):
+        snapshot = asyncio.run(
+            CodexUsageProvider(local_usage_reader=FailingReader()).fetch()
+        )
+    assert snapshot.d7_remaining_percent == 97
+    assert snapshot.today_tokens is None
+    assert snapshot.last_7d_tokens is None
+    warning.assert_called_once()
+
+
+def test_provider_midnight_zero_does_not_reuse_yesterdays_tokens():
+    class MidnightReader:
+        def read_daily_tokens(self, now):
+            return {now.date(): 0, now.date() - dt.timedelta(days=1): 500}
+
+    with patch("codexmeter.provider.JsonRpcClient", FakeClient):
+        snapshot = asyncio.run(
+            CodexUsageProvider(local_usage_reader=MidnightReader()).fetch()
+        )
+    assert snapshot.today_tokens == 0
+    assert snapshot.last_7d_tokens == 500
+
+
+def test_provider_logs_daily_diagnostics_only_when_totals_change():
+    provider = CodexUsageProvider(local_usage_reader=FakeLocalUsageReader())
     with (
         patch("codexmeter.provider.JsonRpcClient", FakeClient),
         patch("codexmeter.provider.LOGGER.info") as info,
     ):
         asyncio.run(provider.fetch())
         asyncio.run(provider.fetch())
-
     info.assert_called_once()
-    message = info.call_args.args[0]
-    assert "observed_utc=%s" in message
-    assert "observed_local=%s" in message
-    assert "server_utc_today=%s" in message
-    assert "server_local_today=%s" in message
-    assert "local_today=%s" in message
-    assert "difference=%s" in message
-    assert "selected=%s" in message
-
-
-def test_provider_warns_once_when_large_difference_selects_local_value():
-    provider = CodexUsageProvider(local_usage_reader=LargeLocalUsageReader())
-
-    with (
-        patch("codexmeter.provider.JsonRpcClient", MismatchedUsageClient),
-        patch("codexmeter.provider.LOGGER.warning") as warning,
-    ):
-        asyncio.run(provider.fetch())
-        asyncio.run(provider.fetch())
-
-    warning.assert_called_once()
-    assert warning.call_args.args[-1] == "local_mismatch"
+    assert "source=local_sessions" in info.call_args.args[0]
