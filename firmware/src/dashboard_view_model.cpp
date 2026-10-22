@@ -1,5 +1,7 @@
 #include "dashboard_view_model.h"
 
+#include "compact_tokens.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -66,59 +68,6 @@ void format_d7_reset(
       (seconds + 24L * 60L * 60L - 1L) /
       (24L * 60L * 60L);
   snprintf(output, size, "%ldd 后重置", days);
-}
-
-void format_compact_tokens(
-    char* output, size_t size, bool valid, uint64_t tokens,
-    bool two_decimal_large_units = false) {
-  if (!valid) {
-    strlcpy(output, "--", size);
-    return;
-  }
-
-  static const char* UNITS[] = {"", "K", "M", "B", "T"};
-  double scaled = static_cast<double>(tokens);
-  uint64_t unit_size = 1;
-  int unit = 0;
-  while (scaled >= 1000.0 && unit < 4) {
-    scaled /= 1000.0;
-    unit_size *= 1000ULL;
-    unit++;
-  }
-
-  if (two_decimal_large_units && unit >= 3) {
-    uint64_t tokens_per_hundredth = unit_size / 100ULL;
-    uint64_t hundredths =
-        (tokens + tokens_per_hundredth / 2ULL) /
-        tokens_per_hundredth;
-    if (hundredths >= 100000ULL && unit < 4) {
-      unit++;
-      unit_size *= 1000ULL;
-      tokens_per_hundredth = unit_size / 100ULL;
-      hundredths =
-          (tokens + tokens_per_hundredth / 2ULL) /
-          tokens_per_hundredth;
-    }
-    snprintf(
-        output, size, "%llu.%02llu%s",
-        static_cast<unsigned long long>(hundredths / 100ULL),
-        static_cast<unsigned long long>(hundredths % 100ULL),
-        UNITS[unit]);
-  } else if (unit == 0) {
-    snprintf(
-        output, size, "%llu",
-        static_cast<unsigned long long>(tokens));
-  } else if (scaled >= 100.0) {
-    snprintf(output, size, "%.0f%s", scaled, UNITS[unit]);
-  } else {
-    snprintf(output, size, "%.1f%s", scaled, UNITS[unit]);
-    size_t len = strlen(output);
-    if (len >= 3 &&
-        output[len - 3] == '.' && output[len - 2] == '0') {
-      output[len - 3] = output[len - 1];
-      output[len - 2] = '\0';
-    }
-  }
 }
 
 }  // namespace

@@ -1,5 +1,7 @@
 #include "walle_theme.h"
 
+#include "theme_text_fit.h"
+
 #include <esp_heap_caps.h>
 #include <stdio.h>
 #include <string.h>
@@ -709,6 +711,10 @@ void update_secondary(
   int value_scale =
       strlen(value) >= 5 ? 164 : 187;
   constexpr int UNIT_SCALE = 204;
+  int unit_width = unit[0]
+      ? scaled_label_width(state->secondary_unit, UNIT_SCALE) : 0;
+  value_scale = fit_label_scale_x(
+      state->secondary_value, value_scale, 466 - 356 - 3 - unit_width);
   lv_obj_set_style_transform_scale_x(
       state->secondary_value, value_scale, 0);
   lv_obj_set_style_transform_scale_y(

@@ -529,8 +529,9 @@ void update_counter_values(
       lv_obj_t* const* cells, int cell_count, const char* text) {
     size_t length = text ? strlen(text) : 0;
     if (length > static_cast<size_t>(cell_count)) {
-      text += length - cell_count;
-      length = cell_count;
+      // A bad input must never silently discard the most significant digits.
+      text = "--";
+      length = 2;
     }
     int leading = cell_count - static_cast<int>(length);
     for (int i = 0; i < cell_count; ++i) {
@@ -566,8 +567,8 @@ void update_counter_values(
     }
     size_t length = text ? strlen(text) : 0;
     if (length > static_cast<size_t>(roller_count)) {
-      text += length - roller_count;
-      length = roller_count;
+      text = "--";
+      length = 2;
     }
     int leading = roller_count - static_cast<int>(length);
     for (int i = leading; i < roller_count; ++i) {
@@ -594,8 +595,8 @@ void update_counter_values(
   char unit[4];
   split_unit(today, value, sizeof(value), unit, sizeof(unit));
   bool today_integer_layout =
-      model.has_today_tokens && model.today_tokens >= 100000000ULL &&
-      unit[0] == 'M' && value[0] != '\0' && !strchr(value, '.');
+      model.has_today_tokens && unit[0] == 'M' &&
+      strlen(value) == 3 && !strchr(value, '.');
   if (today_integer_layout) {
     lv_obj_clear_flag(state->today_integer_panel, LV_OBJ_FLAG_HIDDEN);
     for (int i = 0; i < 3; ++i) {

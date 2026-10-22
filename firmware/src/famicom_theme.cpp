@@ -1,5 +1,7 @@
 #include "famicom_theme.h"
 
+#include "theme_text_fit.h"
+
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -671,22 +673,25 @@ void update_secondary(
     set_label_text_if_changed(
         state->secondary_heading, "7D / REMAINS");
   }
-  bool changed =
-      set_label_text_if_changed(state->secondary_value, value);
+  set_label_text_if_changed(state->secondary_value, value);
   set_label_text_if_changed(state->secondary_unit, unit);
   size_t length = strlen(value);
   int value_scale_x =
       state->display_font_80
           ? (length >= 5 ? 205 : (length == 4 ? 235 : 260))
           : (length >= 5 ? 225 : (length == 4 ? 255 : 286));
-  if (changed) {
-    lv_obj_set_style_transform_scale_x(
-        state->secondary_value, value_scale_x, 0);
-  }
+  // Reserve the unit and gap before fitting the number; clamping the unit
+  // alone would overlap the last digit on six-character values such as 123.45.
+  int unit_width = scaled_label_width(
+      state->secondary_unit, state->display_font_36 ? 240 : 250);
+  value_scale_x = fit_label_scale_x(
+      state->secondary_value, value_scale_x,
+      450 - lv_obj_get_x(state->secondary_value) - 8 - unit_width);
+  lv_obj_set_style_transform_scale_x(
+      state->secondary_value, value_scale_x, 0);
   int unit_x =
       lv_obj_get_x(state->secondary_value) +
       scaled_label_width(state->secondary_value, value_scale_x) + 8;
-  if (unit_x > 432) unit_x = 432;
   if (lv_obj_get_x(state->secondary_unit) != unit_x) {
     lv_obj_set_x(state->secondary_unit, unit_x);
   }

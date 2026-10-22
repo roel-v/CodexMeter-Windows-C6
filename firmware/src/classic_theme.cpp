@@ -1,5 +1,7 @@
 #include "classic_theme.h"
 
+#include "theme_text_fit.h"
+
 #include <math.h>
 #include <string.h>
 
@@ -287,6 +289,14 @@ void update_usage(
   lv_label_set_text(
       state->token_7d_value,
       model.last_7d_tokens_text);
+  // Fit the complete text (including its unit) within each existing column.
+  for (lv_obj_t* label : {state->token_today_value, state->token_7d_value}) {
+    int width = label == state->token_today_value
+        ? 178 : PANEL_CONTENT_W - TOKEN_RIGHT_COLUMN_X - 2;
+    lv_obj_set_style_transform_pivot_x(label, 0, 0);
+    lv_obj_set_style_transform_scale_x(
+        label, fit_label_scale_x(label, 256, width), 0);
+  }
   lv_label_set_text(
       state->d7_pct, model.d7_percent_text);
   lv_label_set_text(state->d7_reset, model.d7_reset_text);
