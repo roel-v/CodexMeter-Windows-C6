@@ -5,6 +5,8 @@
 #include <string.h>
 
 #include "config.h"
+#include "c6_assets.h"
+#include "theme_fonts.h"
 #include "device_log.h"
 
 namespace {
@@ -77,6 +79,9 @@ struct WalleV10ThemeState {
   uint8_t* leaf_mask = nullptr;
   lv_image_dsc_t background_dsc{};
   ThemeResources resources{};
+#ifdef CODEXMETER_BOARD_C6
+  C6ImagePatch leaf_patch{};
+#endif
 
   int quota_percent = -2;
   int running_count = -1;
@@ -245,20 +250,23 @@ bool read_file_exact(
 }
 
 void release_assets(WalleV10ThemeState* state) {
+#ifdef CODEXMETER_BOARD_C6
+  c6_patch_free(&state->leaf_patch);
+#endif
   if (state->background_pixels) {
-    heap_caps_free(state->background_pixels);
+    theme_asset_free(state->background_pixels);
   }
   if (state->leaf_base_pixels) {
-    heap_caps_free(state->leaf_base_pixels);
+    theme_asset_free(state->leaf_base_pixels);
   }
   if (state->leaf_active_pixels) {
-    heap_caps_free(state->leaf_active_pixels);
+    theme_asset_free(state->leaf_active_pixels);
   }
   if (state->leaf_inactive_pixels) {
-    heap_caps_free(state->leaf_inactive_pixels);
+    theme_asset_free(state->leaf_inactive_pixels);
   }
   if (state->leaf_mask) {
-    heap_caps_free(state->leaf_mask);
+    theme_asset_free(state->leaf_mask);
   }
   state->background_pixels = nullptr;
   state->leaf_base_pixels = nullptr;
@@ -269,6 +277,14 @@ void release_assets(WalleV10ThemeState* state) {
 }
 
 bool load_assets(WalleV10ThemeState* state) {
+#ifdef CODEXMETER_BOARD_C6
+  if (!c6_asset_image(&state->background_dsc, &state->background_pixels,
+                       BACKGROUND_PATH, CODEXMETER_SCREEN_W, CODEXMETER_SCREEN_H)) return false;
+  state->leaf_active_pixels = reinterpret_cast<uint16_t*>(c6_asset_map(LEAF_ACTIVE_PATH, LEAF_CROP_BYTES));
+  state->leaf_mask = reinterpret_cast<uint8_t*>(c6_asset_map(LEAF_MASK_PATH, LEAF_CROP_PIXELS));
+  state->leaf_inactive_pixels = reinterpret_cast<uint16_t*>(c6_asset_map(LEAF_INACTIVE_PATH, LEAF_CROP_BYTES));
+  return state->leaf_active_pixels && state->leaf_mask && state->leaf_inactive_pixels;
+#else
   state->background_pixels = static_cast<uint8_t*>(
       heap_caps_malloc(
           BACKGROUND_BYTES,
@@ -338,6 +354,7 @@ bool load_assets(WalleV10ThemeState* state) {
   state->background_dsc.reserved = nullptr;
   state->background_dsc.reserved_2 = nullptr;
   return true;
+#endif
 }
 
 lv_obj_t* make_lamp(
@@ -443,7 +460,7 @@ void make_dynamic_layer(WalleV10ThemeState* state) {
 }
 
 bool create_fonts(WalleV10ThemeState* state) {
-#if LV_USE_TINY_TTF && LV_TINY_TTF_FILE_SUPPORT
+#if (LV_USE_TINY_TTF && LV_TINY_TTF_FILE_SUPPORT) || defined(CODEXMETER_BOARD_C6)
   state->font_160 = lv_tiny_ttf_create_file_ex(
       FONT_PATH, 160, LV_FONT_KERNING_NORMAL, 12);
   state->font_142 = lv_tiny_ttf_create_file_ex(
@@ -585,6 +602,18 @@ void update_quota(
       percent < 0 ? 0 : (percent * LEAF_COUNT) / 100;
   if (active > LEAF_COUNT) active = LEAF_COUNT;
 
+#ifdef CODEXMETER_BOARD_C6
+  const auto* base = reinterpret_cast<const uint16_t*>(state->background_pixels);
+  for (int y = 0; y < LEAF_CROP_H; ++y) {
+    for (int x = 0; x < LEAF_CROP_W; ++x) {
+      const size_t i = y * LEAF_CROP_W + x;
+      const uint8_t cell = state->leaf_mask[i];
+      const uint16_t original = base[(LEAF_CROP_Y + y) * CODEXMETER_SCREEN_W + LEAF_CROP_X + x];
+      state->leaf_patch.pixels[i] = cell == 0 ? original : (active == REFERENCE_ACTIVE_LEAVES ? original : (cell <= active ? state->leaf_active_pixels[i] : state->leaf_inactive_pixels[i]));
+    }
+  }
+  lv_obj_invalidate(state->leaf_patch.image);
+#else
   auto* background =
       reinterpret_cast<uint16_t*>(state->background_pixels);
   for (int y = 0; y < LEAF_CROP_H; ++y) {
@@ -609,6 +638,7 @@ void update_quota(
     }
   }
   lv_obj_invalidate(state->background);
+#endif
 }
 
 void format_reset(
@@ -668,7 +698,7 @@ void update_battery(
 
   char text[12];
   if (percent < 0) {
-    strlcpy(text, charging ? "USB" : "--%", sizeof(text));
+    strlcpy(text, battery_unavailable_text(percent, charging), sizeof(text));
   } else {
     snprintf(text, sizeof(text), "%d%%", percent);
   }
@@ -758,6 +788,10 @@ bool walle_v10_mount(
   lv_image_set_src(
       state->background, &state->background_dsc);
   lv_obj_set_pos(state->background, 0, 0);
+#ifdef CODEXMETER_BOARD_C6
+  if (!c6_patch_create(&state->leaf_patch, state->root, state->background_pixels,
+                       LEAF_CROP_X, LEAF_CROP_Y, LEAF_CROP_W, LEAF_CROP_H)) return false;
+#endif
   make_dynamic_layer(state);
   return true;
 }

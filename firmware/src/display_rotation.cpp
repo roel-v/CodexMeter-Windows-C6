@@ -14,13 +14,16 @@ static uint8_t normalize_rotation(uint8_t rotation) {
 }
 
 bool display_rotation_init() {
-#ifndef BOARD_HAS_PSRAM
-  device_logf("WARN", "display rotation disabled no_psram");
-  return false;
-#else
+#ifdef BOARD_HAS_PSRAM
   rotation_buf_pixels = (size_t)CODEXMETER_SCREEN_W * (size_t)CODEXMETER_SCREEN_H;
   rotation_buf =
       (uint16_t*)heap_caps_malloc(rotation_buf_pixels * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+#else
+  // Rotate only the current LVGL strip, never allocate a full frame on C6.
+  rotation_buf_pixels = (size_t)CODEXMETER_SCREEN_W * CODEXMETER_DRAW_BUFFER_LINES;
+  rotation_buf = (uint16_t*)heap_caps_malloc(
+      rotation_buf_pixels * sizeof(uint16_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+#endif
   if (!rotation_buf) {
     rotation_buf_pixels = 0;
     device_logf("WARN", "display rotation buffer alloc failed");
@@ -29,7 +32,6 @@ bool display_rotation_init() {
   device_logf("INFO", "display rotation buffer ready pixels=%u",
               (unsigned int)rotation_buf_pixels);
   return true;
-#endif
 }
 
 bool display_rotation_available() {
@@ -89,7 +91,7 @@ static bool rotate_rect(const uint16_t* src, int32_t sx, int32_t sy, int32_t w,
   }
 }
 
-void display_rotation_draw(Arduino_CO5300* gfx, int32_t x, int32_t y, int32_t w,
+void display_rotation_draw(CodexMeterPanel* gfx, int32_t x, int32_t y, int32_t w,
                            int32_t h, const uint16_t* pixels, uint8_t rotation) {
   if (!gfx) return;
   rotation = normalize_rotation(rotation);

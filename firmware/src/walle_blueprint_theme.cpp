@@ -5,6 +5,8 @@
 #include <string.h>
 
 #include "config.h"
+#include "c6_assets.h"
+#include "theme_fonts.h"
 #include "device_log.h"
 
 namespace {
@@ -110,6 +112,10 @@ struct WalleBlueprintThemeState {
   uint8_t* battery_mask = nullptr;
   lv_image_dsc_t background_dsc{};
   ThemeResources resources{};
+#ifdef CODEXMETER_BOARD_C6
+  C6ImagePatch bar_patch{};
+  C6ImagePatch battery_patch{};
+#endif
 
   int quota_percent = -2;
   int running_count = -1;
@@ -281,17 +287,21 @@ bool read_file_exact(
 }
 
 void release_assets(WalleBlueprintThemeState* state) {
-  if (state->background_pixels) heap_caps_free(state->background_pixels);
-  if (state->bar_active_pixels) heap_caps_free(state->bar_active_pixels);
-  if (state->bar_inactive_pixels) heap_caps_free(state->bar_inactive_pixels);
-  if (state->bar_mask) heap_caps_free(state->bar_mask);
+#ifdef CODEXMETER_BOARD_C6
+  c6_patch_free(&state->bar_patch);
+  c6_patch_free(&state->battery_patch);
+#endif
+  if (state->background_pixels) theme_asset_free(state->background_pixels);
+  if (state->bar_active_pixels) theme_asset_free(state->bar_active_pixels);
+  if (state->bar_inactive_pixels) theme_asset_free(state->bar_inactive_pixels);
+  if (state->bar_mask) theme_asset_free(state->bar_mask);
   if (state->battery_active_pixels) {
-    heap_caps_free(state->battery_active_pixels);
+    theme_asset_free(state->battery_active_pixels);
   }
   if (state->battery_inactive_pixels) {
-    heap_caps_free(state->battery_inactive_pixels);
+    theme_asset_free(state->battery_inactive_pixels);
   }
-  if (state->battery_mask) heap_caps_free(state->battery_mask);
+  if (state->battery_mask) theme_asset_free(state->battery_mask);
   state->background_pixels = nullptr;
   state->bar_active_pixels = nullptr;
   state->bar_inactive_pixels = nullptr;
@@ -303,6 +313,17 @@ void release_assets(WalleBlueprintThemeState* state) {
 }
 
 bool load_assets(WalleBlueprintThemeState* state) {
+#ifdef CODEXMETER_BOARD_C6
+  if (!c6_asset_image(&state->background_dsc, &state->background_pixels,
+                       BACKGROUND_PATH, CODEXMETER_SCREEN_W, CODEXMETER_SCREEN_H)) return false;
+  state->bar_active_pixels = reinterpret_cast<uint16_t*>(c6_asset_map(BAR_ACTIVE_PATH, BAR_CROP_BYTES));
+  state->bar_inactive_pixels = reinterpret_cast<uint16_t*>(c6_asset_map(BAR_INACTIVE_PATH, BAR_CROP_BYTES));
+  state->bar_mask = reinterpret_cast<uint8_t*>(c6_asset_map(BAR_MASK_PATH, BAR_CROP_PIXELS));
+  state->battery_active_pixels = reinterpret_cast<uint16_t*>(c6_asset_map(BATTERY_ACTIVE_PATH, BATTERY_CROP_BYTES));
+  state->battery_inactive_pixels = reinterpret_cast<uint16_t*>(c6_asset_map(BATTERY_INACTIVE_PATH, BATTERY_CROP_BYTES));
+  state->battery_mask = reinterpret_cast<uint8_t*>(c6_asset_map(BATTERY_MASK_PATH, BATTERY_CROP_PIXELS));
+  return state->bar_active_pixels && state->bar_inactive_pixels && state->bar_mask && state->battery_active_pixels && state->battery_inactive_pixels && state->battery_mask;
+#else
   state->background_pixels = static_cast<uint8_t*>(
       heap_caps_malloc(
           BACKGROUND_BYTES,
@@ -377,6 +398,7 @@ bool load_assets(WalleBlueprintThemeState* state) {
   state->background_dsc.reserved = nullptr;
   state->background_dsc.reserved_2 = nullptr;
   return true;
+#endif
 }
 
 lv_obj_t* make_lamp(
@@ -547,7 +569,7 @@ void make_dynamic_layer(WalleBlueprintThemeState* state) {
 }
 
 bool create_fonts(WalleBlueprintThemeState* state) {
-#if LV_USE_TINY_TTF && LV_TINY_TTF_FILE_SUPPORT
+#if (LV_USE_TINY_TTF && LV_TINY_TTF_FILE_SUPPORT) || defined(CODEXMETER_BOARD_C6)
   state->value_font_120 = lv_tiny_ttf_create_file_ex(
       VALUE_FONT_PATH, 120, LV_FONT_KERNING_NORMAL, 16);
   state->value_font_82 = lv_tiny_ttf_create_file_ex(
@@ -682,6 +704,18 @@ void update_quota(
       percent < 0 ? 0 : (percent * BAR_CELL_COUNT) / 100;
   if (active > BAR_CELL_COUNT) active = BAR_CELL_COUNT;
 
+#ifdef CODEXMETER_BOARD_C6
+  const auto* base = reinterpret_cast<const uint16_t*>(state->background_pixels);
+  for (int y = 0; y < BAR_CROP_H; ++y) {
+    for (int x = 0; x < BAR_CROP_W; ++x) {
+      const size_t i = y * BAR_CROP_W + x;
+      const uint8_t cell = state->bar_mask[i];
+      const uint16_t original = base[(BAR_CROP_Y + y) * CODEXMETER_SCREEN_W + BAR_CROP_X + x];
+      state->bar_patch.pixels[i] = cell == 0 ? original : (cell <= active ? state->bar_active_pixels[i] : state->bar_inactive_pixels[i]);
+    }
+  }
+  lv_obj_invalidate(state->bar_patch.image);
+#else
   auto* background =
       reinterpret_cast<uint16_t*>(state->background_pixels);
   for (int y = 0; y < BAR_CROP_H; ++y) {
@@ -700,6 +734,7 @@ void update_quota(
     }
   }
   lv_obj_invalidate(state->background);
+#endif
 }
 
 void format_reset(
@@ -752,6 +787,18 @@ void update_battery_cells(
       percent < 0 ? 0 : (percent * BATTERY_CELL_COUNT) / 100;
   if (active > BATTERY_CELL_COUNT) active = BATTERY_CELL_COUNT;
 
+#ifdef CODEXMETER_BOARD_C6
+  const auto* base = reinterpret_cast<const uint16_t*>(state->background_pixels);
+  for (int y = 0; y < BATTERY_CROP_H; ++y) {
+    for (int x = 0; x < BATTERY_CROP_W; ++x) {
+      const size_t i = y * BATTERY_CROP_W + x;
+      const uint8_t cell = state->battery_mask[i];
+      const uint16_t original = base[(BATTERY_CROP_Y + y) * CODEXMETER_SCREEN_W + BATTERY_CROP_X + x];
+      state->battery_patch.pixels[i] = cell == 0 ? original : (cell <= active ? state->battery_active_pixels[i] : state->battery_inactive_pixels[i]);
+    }
+  }
+  lv_obj_invalidate(state->battery_patch.image);
+#else
   auto* background =
       reinterpret_cast<uint16_t*>(state->background_pixels);
   for (int y = 0; y < BATTERY_CROP_H; ++y) {
@@ -770,6 +817,7 @@ void update_battery_cells(
     }
   }
   lv_obj_invalidate(state->background);
+#endif
 }
 
 void update_battery(
@@ -786,7 +834,7 @@ void update_battery(
 
   char text[12];
   if (percent < 0) {
-    strlcpy(text, charging ? "USB" : "--%", sizeof(text));
+    strlcpy(text, battery_unavailable_text(percent, charging), sizeof(text));
   } else {
     snprintf(text, sizeof(text), "%d%%", percent);
   }
@@ -871,6 +919,12 @@ bool walle_blueprint_mount(
   state->background = lv_image_create(state->root);
   lv_image_set_src(state->background, &state->background_dsc);
   lv_obj_set_pos(state->background, 0, 0);
+#ifdef CODEXMETER_BOARD_C6
+  if (!c6_patch_create(&state->bar_patch, state->root, state->background_pixels,
+                       BAR_CROP_X, BAR_CROP_Y, BAR_CROP_W, BAR_CROP_H)) return false;
+  if (!c6_patch_create(&state->battery_patch, state->root, state->background_pixels,
+                       BATTERY_CROP_X, BATTERY_CROP_Y, BATTERY_CROP_W, BATTERY_CROP_H)) return false;
+#endif
   make_dynamic_layer(state);
   return true;
 }

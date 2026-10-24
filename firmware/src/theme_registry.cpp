@@ -1,6 +1,7 @@
 #include "theme_registry.h"
 
 #include <string.h>
+#include "config.h"
 
 #include "animal_crossing_theme.h"
 #include "classic_theme.h"
@@ -18,6 +19,7 @@ namespace {
 
 const ThemePack* const THEMES[] = {
     &classic_theme_pack(),
+    &classic_tasks_theme_pack(),
     &cyberpunk_theme_pack(),
     &famicom_theme_pack(),
     &animal_crossing_theme_pack(),

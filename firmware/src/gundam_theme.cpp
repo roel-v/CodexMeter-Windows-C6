@@ -5,6 +5,8 @@
 #include <string.h>
 
 #include "config.h"
+#include "c6_assets.h"
+#include "theme_fonts.h"
 #include "device_log.h"
 
 namespace {
@@ -255,6 +257,10 @@ void split_suffix(
 }
 
 bool load_background(GundamThemeState* state) {
+#ifdef CODEXMETER_BOARD_C6
+  return c6_asset_image(&state->background_dsc, &state->background_pixels,
+                        BACKGROUND_PATH, CODEXMETER_SCREEN_W, CODEXMETER_SCREEN_H);
+#else
   state->background_pixels = static_cast<uint8_t*>(
       heap_caps_malloc(
           BACKGROUND_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
@@ -313,6 +319,7 @@ bool load_background(GundamThemeState* state) {
   state->background_dsc.reserved = nullptr;
   state->background_dsc.reserved_2 = nullptr;
   return true;
+#endif
 }
 
 void make_background(GundamThemeState* state) {
@@ -788,13 +795,13 @@ void update_battery(
     GundamThemeState* state, int percent, bool charging) {
   char text[12];
   if (percent < 0) {
-    strlcpy(text, charging ? "USB" : "--%", sizeof(text));
+    strlcpy(text, battery_unavailable_text(percent, charging), sizeof(text));
   } else {
     snprintf(text, sizeof(text), "%d%%", percent);
   }
   set_label_text_if_changed(
       state->battery_heading,
-      charging ? "BATTERY +" : "BATTERY");
+      percent == BATTERY_USB_POWER ? "POWER" : (charging ? "BATTERY +" : "BATTERY"));
   set_label_text_if_changed(state->battery_value, text);
 
   int scale =
@@ -918,7 +925,7 @@ bool gundam_mount(
 
   if (!load_background(state)) return false;
 
-#if LV_USE_TINY_TTF && LV_TINY_TTF_FILE_SUPPORT
+#if (LV_USE_TINY_TTF && LV_TINY_TTF_FILE_SUPPORT) || defined(CODEXMETER_BOARD_C6)
   state->display_font_100 = lv_tiny_ttf_create_file_ex(
       VALUE_FONT_PATH, 100,
       LV_FONT_KERNING_NORMAL, 24);
@@ -1070,7 +1077,7 @@ void gundam_unmount(void* raw_state) {
   state->display_font_20 = nullptr;
 
   if (state->background_pixels) {
-    heap_caps_free(state->background_pixels);
+    theme_asset_free(state->background_pixels);
   }
   state->background_pixels = nullptr;
   state->background_dsc = lv_image_dsc_t{};

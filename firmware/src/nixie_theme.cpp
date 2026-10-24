@@ -5,6 +5,8 @@
 #include <string.h>
 
 #include "config.h"
+#include "c6_assets.h"
+#include "theme_fonts.h"
 #include "device_log.h"
 
 namespace {
@@ -126,7 +128,7 @@ const lv_font_t* font_or(
 
 lv_font_t* create_font(
     int size, const lv_font_t* fallback, size_t cache_size = 24) {
-#if LV_USE_TINY_TTF && LV_TINY_TTF_FILE_SUPPORT
+#if (LV_USE_TINY_TTF && LV_TINY_TTF_FILE_SUPPORT) || defined(CODEXMETER_BOARD_C6)
   lv_font_t* font = lv_tiny_ttf_create_file_ex(
       VALUE_FONT_PATH, size, LV_FONT_KERNING_NORMAL, cache_size);
   if (font) font->fallback = fallback;
@@ -177,6 +179,10 @@ bool set_text_if_changed(lv_obj_t* label, const char* text) {
 }
 
 bool read_background(NixieThemeState* state) {
+#ifdef CODEXMETER_BOARD_C6
+  return c6_asset_image(&state->background_dsc, &state->background_pixels,
+                        BACKGROUND_PATH, CODEXMETER_SCREEN_W, CODEXMETER_SCREEN_H);
+#else
   state->background_pixels = static_cast<uint8_t*>(
       heap_caps_malloc(
           BACKGROUND_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
@@ -194,7 +200,7 @@ bool read_background(NixieThemeState* state) {
     device_logf(
         "ERROR", "nixie background open failed path=%s res=%d",
         BACKGROUND_PATH, static_cast<int>(result));
-    heap_caps_free(state->background_pixels);
+    theme_asset_free(state->background_pixels);
     state->background_pixels = nullptr;
     return false;
   }
@@ -220,7 +226,7 @@ bool read_background(NixieThemeState* state) {
         static_cast<unsigned long>(total),
         static_cast<unsigned long>(BACKGROUND_BYTES),
         static_cast<int>(result));
-    heap_caps_free(state->background_pixels);
+    theme_asset_free(state->background_pixels);
     state->background_pixels = nullptr;
     return false;
   }
@@ -237,9 +243,14 @@ bool read_background(NixieThemeState* state) {
   state->background_dsc.reserved = nullptr;
   state->background_dsc.reserved_2 = nullptr;
   return true;
+#endif
 }
 
 bool read_today_integer_panel(NixieThemeState* state) {
+#ifdef CODEXMETER_BOARD_C6
+  return c6_asset_image(&state->today_integer_panel_dsc, &state->today_integer_panel_pixels,
+                        TODAY_INTEGER_PANEL_PATH, TODAY_INTEGER_PANEL_W, TODAY_INTEGER_PANEL_H);
+#else
   state->today_integer_panel_pixels = static_cast<uint8_t*>(
       heap_caps_malloc(
           TODAY_INTEGER_PANEL_BYTES,
@@ -258,7 +269,7 @@ bool read_today_integer_panel(NixieThemeState* state) {
     device_logf(
         "ERROR", "nixie Today integer panel open failed path=%s res=%d",
         TODAY_INTEGER_PANEL_PATH, static_cast<int>(result));
-    heap_caps_free(state->today_integer_panel_pixels);
+    theme_asset_free(state->today_integer_panel_pixels);
     state->today_integer_panel_pixels = nullptr;
     return false;
   }
@@ -284,7 +295,7 @@ bool read_today_integer_panel(NixieThemeState* state) {
         static_cast<unsigned long>(total),
         static_cast<unsigned long>(TODAY_INTEGER_PANEL_BYTES),
         static_cast<int>(result));
-    heap_caps_free(state->today_integer_panel_pixels);
+    theme_asset_free(state->today_integer_panel_pixels);
     state->today_integer_panel_pixels = nullptr;
     return false;
   }
@@ -301,9 +312,20 @@ bool read_today_integer_panel(NixieThemeState* state) {
   state->today_integer_panel_dsc.reserved = nullptr;
   state->today_integer_panel_dsc.reserved_2 = nullptr;
   return true;
+#endif
 }
 
 bool read_digit_assets(NixieThemeState* state) {
+#ifdef CODEXMETER_BOARD_C6
+  for (int digit = 0; digit < 10; ++digit) {
+    char path[48];
+    snprintf(path, sizeof(path), "S:/themes/nixie_digit_%d.argb8888", digit);
+    if (!c6_asset_image(&state->digit_dsc[digit], &state->digit_pixels[digit],
+                         path, DIGIT_SPRITE_W, DIGIT_SPRITE_H,
+                         LV_COLOR_FORMAT_ARGB8888)) return false;
+  }
+  return true;
+#else
   for (int digit = 0; digit < 10; ++digit) {
     char path[48];
     snprintf(
@@ -366,6 +388,7 @@ bool read_digit_assets(NixieThemeState* state) {
     dsc.reserved_2 = nullptr;
   }
   return true;
+#endif
 }
 
 void create_fonts(NixieThemeState* state) {
@@ -683,11 +706,15 @@ void update_battery(
 
   char text[8];
   if (percent < 0) {
-    strlcpy(text, "--", sizeof(text));
+    strlcpy(text, percent == BATTERY_USB_POWER ? "USB" : "--", sizeof(text));
   } else {
     if (percent > 100) percent = 100;
     snprintf(text, sizeof(text), "%d", percent);
   }
+  const bool usb = percent == BATTERY_USB_POWER;
+  lv_obj_set_width(state->battery_value, usb ? 60 : BATTERY_VALUE_W);
+  lv_obj_set_x(state->battery_value, usb ? BATTERY_VALUE_X - 6 : BATTERY_VALUE_X);
+  lv_obj_set_style_text_letter_space(state->battery_value, usb ? 1 : 4, 0);
   set_text_if_changed(state->battery_value, text);
 
   int lit = percent <= 0 ? 0 : (percent + 32) / 33;
@@ -769,18 +796,18 @@ void nixie_unmount(void* raw_state) {
   destroy_font(state->unit_22);
 
   if (state->background_pixels) {
-    heap_caps_free(state->background_pixels);
+    theme_asset_free(state->background_pixels);
   }
   state->background_pixels = nullptr;
   state->background_dsc = lv_image_dsc_t{};
   if (state->today_integer_panel_pixels) {
-    heap_caps_free(state->today_integer_panel_pixels);
+    theme_asset_free(state->today_integer_panel_pixels);
   }
   state->today_integer_panel_pixels = nullptr;
   state->today_integer_panel_dsc = lv_image_dsc_t{};
   for (int digit = 0; digit < 10; ++digit) {
     if (state->digit_pixels[digit]) {
-      heap_caps_free(state->digit_pixels[digit]);
+      theme_asset_free(state->digit_pixels[digit]);
     }
     state->digit_pixels[digit] = nullptr;
     state->digit_dsc[digit] = lv_image_dsc_t{};

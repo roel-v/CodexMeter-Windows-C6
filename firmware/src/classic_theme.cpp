@@ -55,6 +55,8 @@ struct ClassicThemeState {
   lv_obj_t* d7_heading = nullptr;
   lv_obj_t* d7_pct = nullptr;
   lv_obj_t* d7_reset = nullptr;
+  lv_obj_t* task_values[3]{};
+  bool tasks = false;
   lv_obj_t* activity_dots[ACTIVITY_MAX_DOTS]{};
   ThemeResources resources{};
   bool token_usage_mode = false;
@@ -204,19 +206,19 @@ void set_token_usage_mode(ClassicThemeState* state, bool enabled) {
   if (enabled) {
     lv_obj_add_flag(state->h5_content, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(state->token_content, LV_OBJ_FLAG_HIDDEN);
-    lv_label_set_text(state->top_title, "Token用量");
+    lv_label_set_text(state->top_title, "Token usage");
     lv_obj_set_style_text_font(
         state->top_title, state->resources.title_font, 0);
-    lv_label_set_text(state->d7_heading, "7d 额度剩余");
+    lv_label_set_text(state->d7_heading, state->tasks ? "Weekly quota" : "7d remaining");
     lv_obj_set_style_text_font(
         state->d7_heading, state->resources.title_font, 0);
   } else {
     lv_obj_clear_flag(state->h5_content, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(state->token_content, LV_OBJ_FLAG_HIDDEN);
-    lv_label_set_text(state->top_title, "剩余用量");
+    lv_label_set_text(state->top_title, "Usage remaining");
     lv_obj_set_style_text_font(
         state->top_title, state->resources.ui_font, 0);
-    lv_label_set_text(state->d7_heading, "7d 剩余:");
+    lv_label_set_text(state->d7_heading, state->tasks ? "Weekly quota" : "7d left:");
     lv_obj_set_style_text_font(
         state->d7_heading, state->resources.ui_font, 0);
   }
@@ -225,6 +227,9 @@ void set_token_usage_mode(ClassicThemeState* state, bool enabled) {
       state->top_title, LV_ALIGN_TOP_MID, 0,
       enabled ? TOP_TITLE_TOKEN_Y : TOP_TITLE_DEFAULT_Y);
   lv_obj_align(state->d7_heading, LV_ALIGN_TOP_LEFT, 0, 0);
+  if (state->tasks) {
+    lv_obj_set_style_text_font(state->d7_heading, &lv_font_montserrat_24, 0);
+  }
 }
 
 void update_activity(
@@ -294,10 +299,11 @@ void update_usage(
 
 void update_battery(ClassicThemeState* state, int pct, bool charging) {
   if (pct < 0) {
-    lv_label_set_text(state->top_battery, charging ? "USB" : "--%");
-    lv_obj_set_width(state->top_battery_fill, charging ? 18 : 2);
+    const bool usb = pct == BATTERY_USB_POWER;
+    lv_label_set_text(state->top_battery, battery_unavailable_text(pct, charging));
+    lv_obj_set_width(state->top_battery_fill, usb ? 18 : 2);
     lv_obj_set_style_bg_color(
-        state->top_battery_fill, charging ? BATTERY_GREEN : DIM, 0);
+        state->top_battery_fill, usb ? BATTERY_GREEN : DIM, 0);
     return;
   }
 
@@ -340,10 +346,11 @@ void tick_activity(ClassicThemeState* state, uint32_t now) {
 
 bool classic_mount(
     void* raw_state, lv_obj_t* parent,
-    const ThemeResources& resources) {
+    const ThemeResources& resources, bool tasks = false) {
   auto* state = static_cast<ClassicThemeState*>(raw_state);
   *state = ClassicThemeState{};
   state->resources = resources;
+  state->tasks = tasks;
 
   state->root = lv_obj_create(parent);
   strip_obj(state->root);
@@ -358,7 +365,7 @@ bool classic_mount(
   lv_obj_align(top_logo, LV_ALIGN_TOP_LEFT, 22, 16);
 
   state->top_title = make_label(
-      state->root, "剩余用量", resources.ui_font, TEXT);
+      state->root, "Usage remaining", resources.ui_font, TEXT);
   lv_obj_align(
       state->top_title, LV_ALIGN_TOP_MID, 0, TOP_TITLE_DEFAULT_Y);
 
@@ -371,33 +378,33 @@ bool classic_mount(
   lv_obj_t* panel_h5 = make_panel(state, 92);
   state->h5_content = make_panel_content(panel_h5);
   lv_obj_t* label = make_label(
-      state->h5_content, "5h 剩余:", resources.ui_font, DIM);
+      state->h5_content, "5h left:", resources.ui_font, DIM);
   lv_obj_align(label, LV_ALIGN_TOP_LEFT, 0, 0);
   state->h5_pct = make_label(
       state->h5_content, "--%", resources.percent_font, TEXT);
   lv_obj_align(state->h5_pct, LV_ALIGN_BOTTOM_LEFT, 0, 0);
   state->h5_reset = make_label(
-      state->h5_content, "-- 后重置", resources.ui_font, DIM);
+      state->h5_content, "Reset in --", resources.ui_font, DIM);
   lv_obj_align(state->h5_reset, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 
   state->token_content = make_panel_content(panel_h5);
   label = make_label(
-      state->token_content, "今日用量", resources.title_font, DIM);
-  lv_obj_align(label, LV_ALIGN_TOP_LEFT, 0, 0);
+      state->token_content, "Today", resources.title_font, DIM);
+  lv_obj_align(label, LV_ALIGN_TOP_LEFT, 0, tasks ? 6 : 0);
   state->token_today_value = make_label(
       state->token_content, "--", resources.token_font, TEXT);
   lv_obj_align(
       state->token_today_value, LV_ALIGN_BOTTOM_LEFT, 0,
-      TOKEN_VALUE_Y_OFFSET);
+      tasks ? -1 : TOKEN_VALUE_Y_OFFSET);
 
   label = make_label(
-      state->token_content, "近7天", resources.title_font, DIM);
-  lv_obj_set_pos(label, TOKEN_RIGHT_COLUMN_X, 0);
+      state->token_content, "Last 7 days", resources.title_font, DIM);
+  lv_obj_set_pos(label, TOKEN_RIGHT_COLUMN_X, tasks ? 6 : 0);
   state->token_7d_value = make_label(
       state->token_content, "--", resources.token_font, TEXT);
   lv_obj_align(
       state->token_7d_value, LV_ALIGN_BOTTOM_LEFT,
-      TOKEN_RIGHT_COLUMN_X, TOKEN_VALUE_Y_OFFSET);
+      TOKEN_RIGHT_COLUMN_X, tasks ? -1 : TOKEN_VALUE_Y_OFFSET);
 
   lv_obj_t* divider = lv_obj_create(state->token_content);
   strip_obj(divider);
@@ -410,14 +417,40 @@ bool classic_mount(
   lv_obj_t* panel_d7 = make_panel(state, 270);
   lv_obj_t* content_d7 = make_panel_content(panel_d7);
   state->d7_heading = make_label(
-      content_d7, "7d 剩余:", resources.ui_font, DIM);
+      content_d7, tasks ? "Weekly quota" : "7d left:", resources.ui_font, DIM);
   lv_obj_align(state->d7_heading, LV_ALIGN_TOP_LEFT, 0, 0);
   state->d7_pct = make_label(
       content_d7, "--%", resources.percent_font, TEXT);
   lv_obj_align(state->d7_pct, LV_ALIGN_BOTTOM_LEFT, 0, 0);
   state->d7_reset = make_label(
-      content_d7, "-- 后重置", resources.ui_font, DIM);
+      content_d7, "Reset in --", resources.ui_font, DIM);
   lv_obj_align(state->d7_reset, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+
+  if (tasks) {
+    // Keep the original panels; reserve the lower right quarter for chat counts.
+    lv_obj_set_height(content_d7, 126);
+    lv_obj_set_style_text_font(state->d7_heading, &lv_font_montserrat_24, 0);
+    lv_obj_align(state->d7_pct, LV_ALIGN_TOP_LEFT, 0, 39);
+    lv_obj_set_style_text_font(state->d7_reset, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(state->d7_reset, TEXT, 0);
+    lv_obj_align(state->d7_reset, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    const char* names[] = {"Running", "Waiting", "Done"};
+    const lv_color_t colors[] = {CODEX_BLUE, BATTERY_YELLOW, BATTERY_GREEN};
+    for (int i = 0; i < 3; ++i) {
+      label = make_label(content_d7, names[i], &lv_font_montserrat_24, colors[i]);
+      lv_obj_set_pos(label, 202, 5 + i * 42);
+      state->task_values[i] = make_label(content_d7, "--", &lv_font_montserrat_24, TEXT);
+      lv_obj_set_width(state->task_values[i], 64);
+      lv_obj_set_style_text_align(state->task_values[i], LV_TEXT_ALIGN_RIGHT, 0);
+      lv_obj_set_pos(state->task_values[i], PANEL_CONTENT_W - 64, 5 + i * 42);
+    }
+    divider = lv_obj_create(content_d7);
+    strip_obj(divider);
+    lv_obj_set_size(divider, 1, 118);
+    lv_obj_set_pos(divider, 188, 4);
+    lv_obj_set_style_bg_color(divider, lv_color_hex(0x303747), 0);
+    lv_obj_set_style_bg_opa(divider, LV_OPA_COVER, 0);
+  }
 
   for (int i = 0; i < ACTIVITY_MAX_DOTS; ++i) {
     state->activity_dots[i] =
@@ -431,6 +464,14 @@ void classic_update(
   auto* state = static_cast<ClassicThemeState*>(raw_state);
   update_usage(state, model);
   update_activity(state, model.running_count);
+  if (state->tasks) {
+    const int counts[] = {model.running_count, model.waiting_count, model.done_count};
+    for (int i = 0; i < 3; ++i) {
+      if (!model.chat_counts_valid) lv_label_set_text(state->task_values[i], "--");
+      else if (counts[i] > 999) lv_label_set_text(state->task_values[i], "999+");
+      else lv_label_set_text_fmt(state->task_values[i], "%d", counts[i]);
+    }
+  }
   update_battery(
       state, model.battery_percent, model.charging);
 }
@@ -447,7 +488,7 @@ void classic_unmount(void* raw_state) {
 
 const ThemeDashboardOps CLASSIC_DASHBOARD = {
     sizeof(ClassicThemeState),
-    classic_mount,
+    [](void* s, lv_obj_t* p, const ThemeResources& r) { return classic_mount(s, p, r); },
     classic_update,
     classic_tick,
     classic_unmount,
@@ -463,6 +504,14 @@ const ThemePack CLASSIC_THEME = {
     nullptr,
 };
 
+const ThemePack CLASSIC_TASKS_THEME = {
+    "classic_tasks", "Classic Tasks", 1, CODEXMETER_BURN_IN_DRIFT_MAX_PX,
+    {sizeof(ClassicThemeState),
+     [](void* s, lv_obj_t* p, const ThemeResources& r) { return classic_mount(s, p, r, true); },
+     classic_update, classic_tick, classic_unmount},
+    nullptr, nullptr,
+};
+
 static_assert(
     sizeof(ClassicThemeState) <= CODEXMETER_THEME_STATE_BYTES,
     "Classic theme state exceeds ThemeRuntime storage");
@@ -471,4 +520,8 @@ static_assert(
 
 const ThemePack& classic_theme_pack() {
   return CLASSIC_THEME;
+}
+
+const ThemePack& classic_tasks_theme_pack() {
+  return CLASSIC_TASKS_THEME;
 }

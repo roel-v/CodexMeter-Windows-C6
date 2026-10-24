@@ -1,6 +1,7 @@
 #include "identity.h"
 
 #include <Arduino.h>
+#include <esp_mac.h>
 
 #include "config.h"
 
@@ -13,7 +14,14 @@ static char json[128];
 void identity_init() {
   if (initialized) return;
 
-  uint64_t chip = ESP.getEfuseMac();
+  // C6 eFuse MAC is EUI-64; the protocol requires the six-byte Wi-Fi MAC.
+  // Pack in the original ESP.getEfuseMac() byte order to preserve S3 IDs.
+  uint8_t mac[6] = {};
+  ESP_ERROR_CHECK(esp_read_mac(mac, ESP_MAC_WIFI_STA));
+  uint64_t chip = 0;
+  for (size_t i = 0; i < sizeof(mac); ++i) {
+    chip |= (uint64_t)mac[i] << (8 * i);
+  }
   uint32_t short_value = (uint32_t)((chip >> 24) & 0xFFFFFFULL);
   snprintf(device_id, sizeof(device_id), "codexmeter-%012llx",
            (unsigned long long)chip);

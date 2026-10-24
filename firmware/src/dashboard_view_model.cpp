@@ -47,25 +47,25 @@ void format_percent(char* output, size_t size, int value) {
 void format_h5_reset(
     char* output, size_t size, int32_t seconds) {
   if (seconds < 0) {
-    strlcpy(output, "-- 后重置", size);
+    strlcpy(output, "Reset in --", size);
     return;
   }
   long minutes = (seconds + 59L) / 60L;
   snprintf(
-      output, size, "%02ld:%02ld 后重置",
+      output, size, "Reset in %02ld:%02ld",
       minutes / 60L, minutes % 60L);
 }
 
 void format_d7_reset(
     char* output, size_t size, int32_t seconds) {
   if (seconds < 0) {
-    strlcpy(output, "-- 后重置", size);
+    strlcpy(output, "Reset in --", size);
     return;
   }
   long days =
       (seconds + 24L * 60L * 60L - 1L) /
       (24L * 60L * 60L);
-  snprintf(output, size, "%ldd 后重置", days);
+  snprintf(output, size, "Reset in %ldd", days);
 }
 
 void format_compact_tokens(
@@ -159,8 +159,12 @@ DashboardViewModel build_dashboard_view_model(
       activity.valid && activity.running_count > 0
           ? activity.running_count
           : 0;
+  model.chat_counts_valid = activity.valid && activity.chat_counts_valid &&
+      (now_ms - activity.received_ms < 15000UL);
+  model.waiting_count = activity.waiting_count;
+  model.done_count = activity.done_count;
   model.battery_percent =
-      battery_percent < 0
+      battery_percent == BATTERY_USB_POWER ? BATTERY_USB_POWER : battery_percent < 0
           ? -1
           : (battery_percent > 100 ? 100 : battery_percent);
   model.charging = charging;

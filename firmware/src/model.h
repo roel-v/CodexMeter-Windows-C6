@@ -22,7 +22,7 @@ struct AlertModel {
   bool has_running_count = false;
   int running_count = 0;
   char id[32] = "";
-  char title[48] = "任务完成！";
+  char title[48] = "Task complete!";
   char body[240] = "";
   long received_at = 0;
 };
@@ -30,6 +30,10 @@ struct AlertModel {
 struct ActivityModel {
   bool valid = false;
   int running_count = 0;
+  bool chat_counts_valid = false;
+  int waiting_count = 0;
+  int done_count = 0;
+  uint32_t received_ms = 0;
   long updated_at = 0;
 };
 

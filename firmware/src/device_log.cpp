@@ -3,6 +3,7 @@
 #include <esp_heap_caps.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <freertos/semphr.h>
 
 #define DEVICE_LOG_CAPACITY 48
 #define DEVICE_LOG_LEVEL_SIZE 8
@@ -20,7 +21,14 @@ static DeviceLogEntry snapshot[DEVICE_LOG_CAPACITY];
 static uint32_t next_seq = 1;
 static size_t head = 0;
 static size_t count = 0;
+static volatile bool serial_enabled = true;
 static portMUX_TYPE log_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static SemaphoreHandle_t serial_lock() {
+  static StaticSemaphore_t storage;
+  static SemaphoreHandle_t lock = xSemaphoreCreateMutexStatic(&storage);
+  return lock;
+}
 
 static void copy_clean(char* dst, size_t dst_size, const char* src) {
   if (dst_size == 0) return;
@@ -61,9 +69,18 @@ void device_logf(const char* level, const char* fmt, ...) {
   if (count < DEVICE_LOG_CAPACITY) count++;
   portEXIT_CRITICAL(&log_mux);
 
-  Serial.printf(
+  xSemaphoreTake(serial_lock(), portMAX_DELAY);
+  if (serial_enabled) Serial.printf(
       "LOG %lu %lu %s %s\n", (unsigned long)seq, (unsigned long)ms, level_copy,
       message_copy);
+  xSemaphoreGive(serial_lock());
+}
+
+void device_log_serial_enabled(bool enabled) {
+  // Wait for an in-flight BLE task log before starting a binary screenshot.
+  xSemaphoreTake(serial_lock(), portMAX_DELAY);
+  serial_enabled = enabled;
+  xSemaphoreGive(serial_lock());
 }
 
 void device_log_heap(const char* phase) {
@@ -78,9 +95,10 @@ void device_log_heap(const char* phase) {
       heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 
   device_logf(
-      "INFO", "heap %s i=%lu il=%lu p=%lu pl=%lu", phase,
+      "INFO", "heap %s i=%lu il=%lu p=%lu pl=%lu min=%lu", phase,
       (unsigned long)internal, (unsigned long)internal_largest,
-      (unsigned long)psram, (unsigned long)psram_largest);
+      (unsigned long)psram, (unsigned long)psram_largest,
+      (unsigned long)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 }
 
 void device_log_dump(Stream& out, size_t limit) {

@@ -3,6 +3,7 @@
 #include <lvgl.h>
 #include <esp_err.h>
 #include <esp_heap_caps.h>
+#include <esp_rom_crc.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 
@@ -11,6 +12,7 @@
 #include "device_settings.h"
 #include "device_log.h"
 #include "display_rotation.h"
+#include "display_panel.h"
 #include "identity.h"
 #include "imu.h"
 #include "model.h"
@@ -23,13 +25,13 @@
 #define BUF_LINES 40
 #else
 #define LV_BUF_CAPS (MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)
-#define BUF_LINES 20
+#define BUF_LINES CODEXMETER_DRAW_BUFFER_LINES
 #endif
 
 static Arduino_DataBus* bus = new Arduino_ESP32QSPI(
     CODEXMETER_LCD_CS, CODEXMETER_LCD_SCLK, CODEXMETER_LCD_D0, CODEXMETER_LCD_D1,
     CODEXMETER_LCD_D2, CODEXMETER_LCD_D3);
-static Arduino_CO5300* gfx = new Arduino_CO5300(
+static CodexMeterPanel* gfx = new CodexMeterPanel(
     bus, CODEXMETER_LCD_RST, 0, CODEXMETER_SCREEN_W, CODEXMETER_SCREEN_H, 0, 0, 0, 0);
 
 enum class GpioButtonEvent : uint8_t {
@@ -154,6 +156,8 @@ static void log_lvgl_mem(const char* phase) {
       mon.used_pct, mon.frag_pct);
 }
 
+static bool capture_tiles = false;
+
 static void lv_flush(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
   if (!screen_on) {
     lv_display_flush_ready(disp);
@@ -162,6 +166,22 @@ static void lv_flush(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map)
 
   int32_t w = area->x2 - area->x1 + 1;
   int32_t h = area->y2 - area->y1 + 1;
+  if (capture_tiles) {
+    const size_t bytes = w * h * sizeof(uint16_t);
+    Serial.printf("TILE %ld %ld %ld %ld %u %lu\n", (long)area->x1, (long)area->y1,
+                  (long)w, (long)h, (unsigned)bytes,
+                  (unsigned long)esp_rom_crc32_le(0, px_map, bytes));
+    size_t sent = 0;
+    while (sent < bytes) {
+      const size_t chunk = bytes - sent > 1024 ? 1024 : bytes - sent;
+      size_t written = Serial.write(px_map + sent, chunk);
+      if (!written) { capture_tiles = false; break; }
+      sent += written;
+      delay(1);
+    }
+    Serial.println();
+    feed_watchdog();
+  }
   display_rotation_draw(
       gfx, area->x1, area->y1, w, h, (uint16_t*)px_map, imu_rotation_quadrant());
   lv_display_flush_ready(disp);
@@ -211,12 +231,39 @@ static void display_init() {
   if (!gfx->begin()) {
     device_logf("ERROR", "gfx begin failed");
   }
+#ifdef CODEXMETER_BOARD_C6
+  // Exact panel setup from Waveshare's 09_LVGL_V9_Test/bsp_lvgl_port.cpp.
+  bus->beginWrite();
+  bus->writeCommand(0x11);
+  bus->endWrite();
+  delay(600);
+  bus->beginWrite();
+  bus->writeC8D8(0xFE, 0x20);
+  bus->writeC8D8(0x19, 0x10);
+  bus->writeC8D8(0x1C, 0xA0);
+  bus->writeC8D8(0xFE, 0x00);
+  bus->writeC8D8(0xC4, 0x80);
+  bus->writeC8D8(0x3A, 0x55);
+  bus->writeC8D8(0x35, 0x00);
+  bus->writeC8D8(0x36, 0x30);
+  bus->writeC8D8(0x53, 0x20);
+  bus->writeC8D8(0x51, 0xFF);
+  bus->writeC8D8(0x63, 0xFF);
+  bus->writeCommand(0x29);
+  bus->endWrite();
+  delay(100);
+#endif
   screen_on = true;
   apply_brightness();
   gfx->fillScreen(0x0000);
   display_rotation_init();
 
   lv_init();
+#if LV_USE_LOG
+  lv_log_register_print_cb([](lv_log_level_t, const char* message) {
+    device_logf("LVGL", "%s", message);
+  });
+#endif
   lv_tick_set_cb(lv_tick);
 
 #ifdef BOARD_HAS_PSRAM
@@ -421,7 +468,9 @@ static void handle_json(const char* json) {
     ble_service_ack();
   } else if (kind == PAYLOAD_ACTIVITY) {
     ui_update_activity(activity);
-    device_logf("INFO", "activity run=%d", activity.running_count);
+    device_logf("INFO", "activity run=%d wait=%d done=%d chats=%d",
+        activity.running_count, activity.waiting_count, activity.done_count,
+        activity.chat_counts_valid);
     ble_service_ack();
   } else if (kind == PAYLOAD_CONTROL) {
     if (strcmp(control.command, "screen") == 0) {
@@ -442,8 +491,16 @@ static void handle_json(const char* json) {
 
 static void send_screenshot() {
 #ifndef BOARD_HAS_PSRAM
-  device_logf("WARN", "screenshot unsupported");
-  Serial.println("SCREENSHOT_UNSUPPORTED");
+  if (!screen_on) { Serial.println("SCREENSHOT_SCREEN_OFF"); return; }
+  device_log_serial_enabled(false);
+  Serial.flush();
+  Serial.printf("TILED_SCREENSHOT_START %d %d\n", CODEXMETER_SCREEN_W, CODEXMETER_SCREEN_H);
+  capture_tiles = true;
+  lv_obj_invalidate(lv_screen_active());
+  lv_refr_now(nullptr);
+  Serial.println(capture_tiles ? "TILED_SCREENSHOT_END" : "TILED_SCREENSHOT_FAILED");
+  capture_tiles = false;
+  device_log_serial_enabled(true);
   return;
 #else
   const uint32_t w = CODEXMETER_SCREEN_W;
@@ -533,6 +590,9 @@ static void handle_serial() {
         activity_apply_demo(&activity, 0);
         ui_update_activity(activity);
         device_logf("INFO", "serial demo_idle");
+      } else if (strcmp(buf, "power") == 0) {
+        power_refresh_and_log();
+        refresh_battery_ui(true);
       } else if (strncmp(buf, "demo_battery ", 13) == 0) {
         int percent = 0;
         if (parse_int_arg(buf + 13, &percent) &&

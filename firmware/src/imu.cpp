@@ -34,13 +34,15 @@ static uint8_t normalize_quadrant(uint8_t quadrant) {
 }
 
 static uint8_t accel_to_rotation(float ax, float ay) {
+  ay *= CODEXMETER_IMU_Y_SIGN;
   float abs_ax = fabsf(ax);
   float abs_ay = fabsf(ay);
   if (abs_ax < IMU_TILT_THRESHOLD && abs_ay < IMU_TILT_THRESHOLD) {
     return 255;
   }
-  if (abs_ay > abs_ax) return (ay > 0.0f) ? 3 : 1;
-  return (ax > 0.0f) ? 0 : 2;
+  uint8_t quadrant = abs_ay > abs_ax ? ((ay > 0.0f) ? 3 : 1)
+                                    : ((ax > 0.0f) ? 0 : 2);
+  return normalize_quadrant(quadrant + CODEXMETER_IMU_ROTATION_OFFSET);
 }
 
 static void update_sample(float ax, float ay, float az) {
@@ -75,7 +77,8 @@ bool imu_init() {
       SensorQMI8658::LPF_MODE_3);
   imu.enableAccelerometer();
   candidate_rotation = current_rotation;
-  device_logf("INFO", "QMI8658 ready auto_rotation=1");
+  device_logf("INFO", "QMI8658 ready auto_rotation=1 offset=%u y_sign=%d",
+              CODEXMETER_IMU_ROTATION_OFFSET, CODEXMETER_IMU_Y_SIGN);
   return true;
 }
 

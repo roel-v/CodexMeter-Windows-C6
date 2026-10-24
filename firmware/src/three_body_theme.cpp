@@ -5,6 +5,8 @@
 #include <string.h>
 
 #include "config.h"
+#include "c6_assets.h"
+#include "theme_fonts.h"
 #include "device_log.h"
 
 namespace {
@@ -295,7 +297,7 @@ void set_unit_text(lv_obj_t* label, const char* text) {
 lv_font_t* create_font(
     const char* path, int size,
     const lv_font_t* fallback, size_t cache_size) {
-#if LV_USE_TINY_TTF && LV_TINY_TTF_FILE_SUPPORT
+#if (LV_USE_TINY_TTF && LV_TINY_TTF_FILE_SUPPORT) || defined(CODEXMETER_BOARD_C6)
   lv_font_t* font = lv_tiny_ttf_create_file_ex(
       path, size, LV_FONT_KERNING_NORMAL, cache_size);
   if (font) font->fallback = fallback;
@@ -320,6 +322,10 @@ void create_fonts(ThreeBodyThemeState* state) {
 }
 
 bool load_background(ThreeBodyThemeState* state) {
+#ifdef CODEXMETER_BOARD_C6
+  return c6_asset_image(&state->background_dsc, &state->background_pixels,
+                        BACKGROUND_PATH, CODEXMETER_SCREEN_W, CODEXMETER_SCREEN_H);
+#else
   state->background_pixels = static_cast<uint8_t*>(
       heap_caps_malloc(
           BACKGROUND_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
@@ -337,7 +343,7 @@ bool load_background(ThreeBodyThemeState* state) {
     device_logf(
         "ERROR", "three_body background open failed path=%s res=%d",
         BACKGROUND_PATH, static_cast<int>(result));
-    heap_caps_free(state->background_pixels);
+    theme_asset_free(state->background_pixels);
     state->background_pixels = nullptr;
     return false;
   }
@@ -363,7 +369,7 @@ bool load_background(ThreeBodyThemeState* state) {
         static_cast<unsigned long>(total),
         static_cast<unsigned long>(BACKGROUND_BYTES),
         static_cast<int>(result));
-    heap_caps_free(state->background_pixels);
+    theme_asset_free(state->background_pixels);
     state->background_pixels = nullptr;
     return false;
   }
@@ -380,6 +386,7 @@ bool load_background(ThreeBodyThemeState* state) {
   state->background_dsc.reserved = nullptr;
   state->background_dsc.reserved_2 = nullptr;
   return true;
+#endif
 }
 
 void make_dynamic_layer(ThreeBodyThemeState* state) {
@@ -613,13 +620,14 @@ void update_battery(
     ThreeBodyThemeState* state, int percent) {
   char value[8];
   if (percent < 0) {
-    strlcpy(value, "--", sizeof(value));
+    strlcpy(value, percent == BATTERY_USB_POWER ? "USB" : "--", sizeof(value));
   } else {
     if (percent > 100) percent = 100;
     snprintf(value, sizeof(value), "%d", percent);
   }
   set_label_text_if_changed(state->battery_value, value);
-  set_unit_text(state->battery_unit, "%");
+  set_unit_text(state->battery_unit, percent == BATTERY_USB_POWER ? "" : "%");
+  set_label_text_if_changed(state->battery_label, percent == BATTERY_USB_POWER ? "PWR" : "BAT");
   int scale = strlen(value) >= 3 ? 160 : 175;
   if (scale != state->battery_scale) {
     state->battery_scale = scale;
@@ -799,7 +807,7 @@ void three_body_unmount(void* raw_state) {
   destroy_font(state->status_font_30);
 
   if (state->background_pixels) {
-    heap_caps_free(state->background_pixels);
+    theme_asset_free(state->background_pixels);
   }
   state->background_pixels = nullptr;
   state->background_dsc = lv_image_dsc_t{};

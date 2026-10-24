@@ -9,6 +9,25 @@
 
 // Waveshare ESP32-S3-Touch-AMOLED-2.16 QSPI AMOLED defaults. Keep all board
 // pins here so hardware revisions can be adjusted without touching UI logic.
+#ifdef CODEXMETER_BOARD_C6
+// Waveshare vendor Arduino-v3.3.3/09_LVGL_V9_Test/user_config.h.
+// The vendor implementation uses SH8601 commands despite the CO5300 product label.
+#define CODEXMETER_LCD_CS 15
+#define CODEXMETER_LCD_SCLK 0
+#define CODEXMETER_LCD_D0 1
+#define CODEXMETER_LCD_D1 2
+#define CODEXMETER_LCD_D2 3
+#define CODEXMETER_LCD_D3 4
+#define CODEXMETER_LCD_RST -1
+#define CODEXMETER_I2C_SDA 8
+#define CODEXMETER_I2C_SCL 7
+#define CODEXMETER_BUTTON_LEFT_PIN 10
+#define CODEXMETER_BUTTON_RIGHT_PIN 9
+// C6 panel alignment: reverse sensor Y, then rotate 90 degrees counterclockwise.
+// Y reversal swaps the buttons-up/down positions, preserving both side positions.
+#define CODEXMETER_IMU_Y_SIGN (-1)
+#define CODEXMETER_IMU_ROTATION_OFFSET 3
+#else
 #define CODEXMETER_LCD_CS 12
 #define CODEXMETER_LCD_SCLK 38
 #define CODEXMETER_LCD_D0 4
@@ -19,12 +38,16 @@
 
 #define CODEXMETER_I2C_SDA 15
 #define CODEXMETER_I2C_SCL 14
-#define CODEXMETER_AXP2101_ADDR 0x34
 
 // Waveshare ESP32-S3-Touch-AMOLED-2.16 has three side buttons:
 // left GPIO0, middle AXP2101 PKEY, right GPIO18.
 #define CODEXMETER_BUTTON_LEFT_PIN 0
 #define CODEXMETER_BUTTON_RIGHT_PIN 18
+#define CODEXMETER_IMU_Y_SIGN 1
+#define CODEXMETER_IMU_ROTATION_OFFSET 0
+#endif
+#define CODEXMETER_AXP2101_ADDR 0x34
+#define CODEXMETER_DRAW_BUFFER_LINES 20
 #define CODEXMETER_BUTTON_DEBOUNCE_MS 30UL
 #define CODEXMETER_BUTTON_LONG_PRESS_MS 700UL
 

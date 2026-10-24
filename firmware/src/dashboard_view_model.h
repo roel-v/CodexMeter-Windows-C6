@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 #include "model.h"
+#include "battery_status.h"
 
 enum class DashboardDataState : uint8_t {
   Waiting = 0,
@@ -29,13 +30,16 @@ struct DashboardViewModel {
   uint16_t today_share_permille = 0;
 
   int running_count = 0;
+  bool chat_counts_valid = false;
+  int waiting_count = 0;
+  int done_count = 0;
   int battery_percent = -1;
   bool charging = false;
 
   char h5_percent_text[8] = "--%";
   char d7_percent_text[8] = "--%";
-  char h5_reset_text[24] = "-- 后重置";
-  char d7_reset_text[24] = "-- 后重置";
+  char h5_reset_text[24] = "Reset in --";
+  char d7_reset_text[24] = "Reset in --";
   char today_tokens_text[24] = "--";
   char last_7d_tokens_text[24] = "--";
 };

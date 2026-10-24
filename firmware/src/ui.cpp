@@ -58,12 +58,12 @@ const DriftOffset DRIFT_OFFSETS[] = {
 };
 
 const char* const SETTING_LABELS[SETTINGS_ITEM_COUNT] = {
-    "主题",
-    "自动换主题",
-    "自动换主题间隔",
-    "屏幕亮度",
-    "音量",
-    "退出设置",
+    "Theme",
+    "Auto theme",
+    "Interval",
+    "Brightness",
+    "Volume",
+    "Back",
 };
 
 lv_obj_t* screen = nullptr;
@@ -120,7 +120,11 @@ uint16_t edit_original_interval =
     CODEXMETER_THEME_AUTO_DEFAULT_MINUTES;
 
 const lv_font_t* ui_font() {
+#ifdef CODEXMETER_BOARD_C6
+  return &lv_font_montserrat_24;
+#else
   return &codexmeter_font_30;
+#endif
 }
 
 const lv_font_t* percent_font() {
@@ -255,7 +259,7 @@ void make_alert_layer() {
   lv_obj_add_flag(alert_layer, LV_OBJ_FLAG_HIDDEN);
 
   alert_title = make_label(
-      alert_layer, "任务完成！", title_font(), TEXT);
+      alert_layer, "Task complete!", title_font(), TEXT);
   lv_obj_set_width(alert_title, ALERT_TEXT_W);
   lv_label_set_long_mode(alert_title, LV_LABEL_LONG_CLIP);
   lv_obj_set_style_text_align(alert_title, LV_TEXT_ALIGN_CENTER, 0);
@@ -329,7 +333,7 @@ void make_settings_layer() {
   lv_obj_remove_flag(settings_layer, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t* title = make_label(
-      settings_layer, "设置", title_font(), TEXT);
+      settings_layer, "Settings", title_font(), TEXT);
   lv_obj_set_pos(title, 24, 18);
   settings_mode_label = make_label(
       settings_layer, "BROWSE", &lv_font_montserrat_14, CODEX_BLUE);
@@ -764,7 +768,9 @@ void ui_tick() {
   if (!display_active) return;
 
   uint32_t now = millis();
-  if (now - dashboard_last_refresh_ms >= 30000UL) {
+  if (now - dashboard_last_refresh_ms >= 30000UL ||
+      (dashboard_model.chat_counts_valid &&
+       now - app_activity.received_ms >= 15000UL)) {
     refresh_dashboard_model(now);
   }
   theme_runtime.tick(now);

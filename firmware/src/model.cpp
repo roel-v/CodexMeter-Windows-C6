@@ -50,8 +50,8 @@ PayloadKind parse_payload(
     alert->has_running_count = false;
     alert->running_count = 0;
     copy_text(alert->id, sizeof(alert->id), doc["id"] | "");
-    copy_text(alert->title, sizeof(alert->title), doc["title"] | "任务完成！");
-    copy_text(alert->body, sizeof(alert->body), doc["body"] | "Codex 任务已完成");
+    copy_text(alert->title, sizeof(alert->title), doc["title"] | "Task complete!");
+    copy_text(alert->body, sizeof(alert->body), doc["body"] | "Codex task completed");
     alert->received_at = doc["t"] | 0L;
     JsonVariant run = doc["run"];
     if (!run.isNull()) {
@@ -66,6 +66,11 @@ PayloadKind parse_payload(
     activity->valid = true;
     activity->running_count = doc["run"] | 0;
     if (activity->running_count < 0) activity->running_count = 0;
+    activity->waiting_count = doc["wait"] | -1;
+    activity->done_count = doc["done"] | -1;
+    activity->chat_counts_valid = (doc["chats"] | false) &&
+        activity->waiting_count >= 0 && activity->done_count >= 0;
+    activity->received_ms = millis();
     activity->updated_at = doc["t"] | 0L;
     return PAYLOAD_ACTIVITY;
   }
@@ -129,12 +134,13 @@ void alert_apply_demo(AlertModel* alert) {
   alert->has_running_count = false;
   alert->running_count = 0;
   copy_text(alert->id, sizeof(alert->id), "demo");
-  copy_text(alert->title, sizeof(alert->title), "任务完成！");
-  copy_text(alert->body, sizeof(alert->body), "TinyTTF 中文渲染测试：修复乱码，龘齉");
+  copy_text(alert->title, sizeof(alert->title), "Task complete!");
+  copy_text(alert->body, sizeof(alert->body), "CodexMeter display test: ready.");
   alert->received_at = now;
 }
 
 void activity_apply_demo(ActivityModel* activity, int running_count) {
+  activity->chat_counts_valid = false;
   long now = time(nullptr);
   if (now < 1000) now = 1783070000;
   activity->valid = true;

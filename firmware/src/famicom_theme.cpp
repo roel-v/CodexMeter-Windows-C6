@@ -5,6 +5,8 @@
 #include <string.h>
 
 #include "config.h"
+#include "c6_assets.h"
+#include "theme_fonts.h"
 
 namespace {
 
@@ -784,7 +786,7 @@ void update_battery(
     FamicomThemeState* state, int percent, bool charging) {
   char text[16];
   if (percent < 0) {
-    strlcpy(text, charging ? "USB" : "--%", sizeof(text));
+    strlcpy(text, battery_unavailable_text(percent, charging), sizeof(text));
   } else {
     snprintf(
         text, sizeof(text), "%d%%%s",
@@ -940,7 +942,7 @@ bool famicom_mount(
   *state = FamicomThemeState{};
   state->resources = resources;
 
-#if LV_USE_TINY_TTF && LV_TINY_TTF_FILE_SUPPORT
+#if (LV_USE_TINY_TTF && LV_TINY_TTF_FILE_SUPPORT) || defined(CODEXMETER_BOARD_C6)
   state->display_font_80 = lv_tiny_ttf_create_file_ex(
       DISPLAY_FONT_PATH, 80,
       LV_FONT_KERNING_NORMAL, 20);

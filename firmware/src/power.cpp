@@ -12,6 +12,8 @@ static bool pmu_ready = false;
 static bool display_active = true;
 static int cached_pct = -1;
 static bool cached_charging = false;
+static bool cached_battery_present = false;
+static bool cached_usb_present = false;
 static PowerKeyEvent pending_key_event = PowerKeyEvent::None;
 static uint32_t last_battery_ms = 0;
 static uint32_t last_charging_ms = 0;
@@ -36,7 +38,10 @@ static uint32_t battery_poll_interval_ms() {
 }
 
 static void refresh_cached_battery(uint32_t now) {
-  const int pct = pmu.getBatteryPercent();
+  cached_battery_present = pmu.isBatteryConnect();
+  cached_usb_present = pmu.isVbusIn();
+  const int pct = cached_battery_present ? pmu.getBatteryPercent()
+      : (cached_usb_present ? BATTERY_USB_POWER : -1);
   if (pct != cached_pct) {
     cached_pct = pct;
     state_changed = true;
@@ -45,7 +50,7 @@ static void refresh_cached_battery(uint32_t now) {
 }
 
 static void refresh_cached_charging(uint32_t now) {
-  const bool charging = pmu.isCharging();
+  const bool charging = pmu.isBatteryConnect() && pmu.isCharging();
   if (charging != cached_charging) {
     cached_charging = charging;
     state_changed = true;
@@ -67,6 +72,23 @@ void power_init() {
   }
 
   pmu.enableBattDetection();
+#ifdef CODEXMETER_BOARD_C6
+  // Panel reset is a power cycle on ALDO3, not an ESP GPIO.
+  // Keep the manufacturer's rail voltages; audio/charging policy is unchanged.
+  pmu.setALDO1Voltage(3300);
+  pmu.setALDO2Voltage(3300);
+  pmu.setALDO3Voltage(3300);
+  pmu.setALDO4Voltage(3300);
+  pmu.enableALDO1();
+  pmu.enableALDO2();
+  pmu.enableALDO4();
+  pmu.enableALDO3();
+  delay(100);
+  pmu.disableALDO3();
+  delay(100);
+  pmu.enableALDO3();
+  delay(100);
+#endif
   pmu.enableBattVoltageMeasure();
   pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
   pmu.clearIrqStatus();
@@ -75,6 +97,8 @@ void power_init() {
       XPOWERS_AXP2101_PKEY_LONG_IRQ |
       XPOWERS_AXP2101_VBUS_REMOVE_IRQ |
       XPOWERS_AXP2101_VBUS_INSERT_IRQ |
+      XPOWERS_AXP2101_BAT_INSERT_IRQ |
+      XPOWERS_AXP2101_BAT_REMOVE_IRQ |
       XPOWERS_AXP2101_BAT_CHG_START_IRQ |
       XPOWERS_AXP2101_BAT_CHG_DONE_IRQ);
   pmu.setPowerKeyPressOnTime(XPOWERS_POWERON_2S);
@@ -105,6 +129,7 @@ void power_tick() {
     bool short_press = pmu.isPekeyShortPressIrq();
     bool power_state_event =
         pmu.isVbusInsertIrq() || pmu.isVbusRemoveIrq() ||
+        pmu.isBatInsertIrq() || pmu.isBatRemoveIrq() ||
         pmu.isBatChargeStartIrq() || pmu.isBatChargeDoneIrq();
     if (long_press) {
       pending_key_event = PowerKeyEvent::LongPress;
@@ -158,6 +183,12 @@ int power_battery_percent() {
 
 bool power_is_charging() {
   return cached_charging;
+}
+
+void power_refresh_and_log() {
+  if (pmu_ready) refresh_cached_state(millis());
+  device_logf("INFO", "power ready=%d battery_present=%d usb_present=%d percent=%d charging=%d",
+      pmu_ready, cached_battery_present, cached_usb_present, cached_pct, cached_charging);
 }
 
 PowerKeyEvent power_take_key_event() {

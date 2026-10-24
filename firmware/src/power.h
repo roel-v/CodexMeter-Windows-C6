@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "battery_status.h"
 
 enum class PowerKeyEvent : uint8_t {
   None = 0,
@@ -14,4 +15,5 @@ void power_set_display_active(bool active);
 bool power_take_state_changed();
 int power_battery_percent();
 bool power_is_charging();
+void power_refresh_and_log();
 PowerKeyEvent power_take_key_event();
