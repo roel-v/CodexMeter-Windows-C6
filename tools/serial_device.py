@@ -8,12 +8,14 @@ import glob
 import json
 import os
 import select
-import termios
 import time
 import sys
 from dataclasses import dataclass
 
-DEFAULT_BAUD = termios.B115200
+if sys.platform != "win32":
+    import termios
+
+DEFAULT_BAUD = 115200 if sys.platform == "win32" else termios.B115200
 DEFAULT_IDENTITY_TIMEOUT = 2.0
 
 
@@ -45,8 +47,22 @@ class SerialSession:
         self.flush_input = flush_input
         self.fd: int | None = None
         self.buffer = bytearray()
+        self.serial = None
 
     def __enter__(self) -> "SerialSession":
+        if sys.platform == "win32":
+            import serial
+            self.serial = serial.Serial()
+            self.serial.port = self.port
+            self.serial.baudrate = 115200
+            self.serial.timeout = 0.25
+            self.serial.write_timeout = 2
+            self.serial.dtr = False
+            self.serial.rts = False
+            self.serial.open()
+            if self.flush_input:
+                self.serial.reset_input_buffer()
+            return self
         self.fd = os.open(self.port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         self._configure_port()
         if self.flush_input:
@@ -54,6 +70,9 @@ class SerialSession:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
+        if self.serial is not None:
+            self.serial.close()
+            self.serial = None
         if self.fd is not None:
             os.close(self.fd)
             self.fd = None
@@ -77,6 +96,9 @@ class SerialSession:
         termios.tcsetattr(self.fd, termios.TCSANOW, attrs)
 
     def write_command(self, command: bytes) -> None:
+        if self.serial is not None:
+            self.serial.write(command)
+            return
         if self.fd is None:
             raise SerialToolError("serial port is not open")
         total = 0
@@ -105,6 +127,13 @@ class SerialSession:
         return data
 
     def _read_more(self, deadline: float) -> None:
+        if self.serial is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SerialToolError("timed out waiting for serial data")
+            self.serial.timeout = min(0.25, remaining)
+            self.buffer.extend(self.serial.read(max(1, self.serial.in_waiting)))
+            return
         if self.fd is None:
             raise SerialToolError("serial port is not open")
         remaining = deadline - time.monotonic()
@@ -122,6 +151,9 @@ class SerialSession:
 
 
 def list_ports() -> list[str]:
+    if sys.platform == "win32":
+        from serial.tools import list_ports as serial_ports
+        return sorted(port.device for port in serial_ports.comports() if port.vid is not None)
     patterns = [
         "/dev/cu.usbmodem*",
         "/dev/cu.usbserial*",

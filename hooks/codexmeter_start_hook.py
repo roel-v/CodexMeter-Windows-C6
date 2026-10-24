@@ -103,6 +103,10 @@ def trusted_transcript_path(value: object) -> Path | None:
 
 def send_event(event: dict[str, Any]) -> None:
     socket_path = Path(os.environ.get("CODEXMETER_SOCKET", str(DEFAULT_SOCKET)))
+    if sys.platform == "win32":
+        from codexmeter.ipc import send_hook
+        send_hook(event, socket_path)
+        return
     payload = json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
         client.settimeout(0.35)

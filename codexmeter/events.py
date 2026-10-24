@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable
@@ -20,6 +21,7 @@ from .payloads import (
 )
 from .settings import ACTIVITY_SWEEP_INTERVAL_SEC, ACTIVITY_TTL_SEC, EVENT_SOCKET
 from .transcripts import TranscriptWatcher
+from . import ipc
 
 log = logging.getLogger(__name__)
 
@@ -224,11 +226,15 @@ class EventServer:
         activity_ttl: float = ACTIVITY_TTL_SEC,
         activity_sweep_interval: float = ACTIVITY_SWEEP_INTERVAL_SEC,
         verify_task_starts: bool = False,
+        open_control_panel: Callable[[], None] | None = None,
     ) -> None:
         self.sink = sink
         self.socket_path = socket_path
         self.status_provider = status_provider
+        self.open_control_panel = open_control_panel
         self.server: asyncio.AbstractServer | None = None
+        self.auth_token: str | None = None
+        self.stop_event: asyncio.Event | None = None
         self.activity = ActivityTracker()
         self.rejected_task_starts: deque[frozenset[str]] = deque(
             maxlen=REJECTED_TASK_HISTORY
@@ -244,10 +250,8 @@ class EventServer:
         )
 
     async def run(self, stop_event: asyncio.Event) -> None:
-        self.socket_path.parent.mkdir(parents=True, exist_ok=True)
-        if self.socket_path.exists():
-            self.socket_path.unlink()
-        self.server = await asyncio.start_unix_server(self._handle_client, self.socket_path)
+        self.stop_event = stop_event
+        self.server, self.auth_token = await ipc.start_server(self._handle_client, self.socket_path)
         log.info("Listening for Codex events on %s", self.socket_path)
         background_tasks = [
             asyncio.create_task(self.transcripts.run(stop_event), name="transcripts")
@@ -275,21 +279,37 @@ class EventServer:
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         try:
-            raw = await asyncio.wait_for(reader.read(4096), timeout=2)
+            raw = await asyncio.wait_for(
+                reader.readline() if self.auth_token else reader.read(ipc.MAX_EVENT_BYTES), timeout=2
+            )
+            if len(raw) > ipc.MAX_EVENT_BYTES:
+                raise ValueError("event is too large")
             event = json.loads(raw.decode("utf-8"))
+            if self.auth_token:
+                token = event.get("token") if isinstance(event, dict) else None
+                if not isinstance(token, str) or not secrets.compare_digest(token, self.auth_token):
+                    raise ValueError("unauthorized local event")
+                event = event.get("event")
             if not isinstance(event, dict):
                 raise ValueError("event must be a JSON object")
             response = await self._dispatch(event)
         except Exception as exc:
             log.debug("Rejected local event: %s", exc)
             response = {"ok": False, "error": str(exc)}
-        writer.write(json.dumps(response, separators=(",", ":")).encode("utf-8"))
+        writer.write(json.dumps(response, separators=(",", ":")).encode("utf-8") + b"\n")
         await writer.drain()
         writer.close()
         await writer.wait_closed()
 
     async def _dispatch(self, event: dict[str, Any]) -> dict[str, Any]:
         event_type = event.get("type")
+        if event_type == "open_control_panel" and self.open_control_panel is not None:
+            self.open_control_panel()
+            return {"ok": True, "queued": "open_control_panel"}
+        if event_type == "shutdown" and self.stop_event is not None:
+            logging.getLogger("codexmeter.lifecycle").info("SHUTDOWN_REQUEST source=authenticated_ipc")
+            self.stop_event.set()
+            return {"ok": True, "status": "stopping"}
         if event_type == "ping":
             response: dict[str, Any] = {
                 "ok": True,
@@ -303,7 +323,7 @@ class EventServer:
             return response
         if event_type == "alert":
             body = str(event.get("body") or event.get("summary") or "")
-            title = str(event.get("title") or "任务完成！")
+            title = str(event.get("title") or "Task complete!")
             running_count = event.get("run", event.get("count"))
             payload = build_alert_payload(
                 body=body,
@@ -420,7 +440,7 @@ class EventServer:
                 "running": self.activity.count,
             }
 
-        title = str(event.get("title") or "任务完成！")
+        title = str(event.get("title") or "Task complete!")
         payload = build_alert_payload(
             body=body,
             title=title,
@@ -551,15 +571,4 @@ def _identity_aliases(aliases: list[str]) -> list[str]:
 
 
 async def send_event(event: dict[str, Any], socket_path: Path = EVENT_SOCKET) -> dict[str, Any]:
-    reader, writer = await asyncio.open_unix_connection(socket_path)
-    writer.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-    await writer.drain()
-    if writer.can_write_eof():
-        writer.write_eof()
-    raw = await asyncio.wait_for(reader.read(4096), timeout=3)
-    writer.close()
-    await writer.wait_closed()
-    if not raw:
-        return {}
-    result = json.loads(raw.decode("utf-8"))
-    return result if isinstance(result, dict) else {}
+    return await ipc.send(event, socket_path)

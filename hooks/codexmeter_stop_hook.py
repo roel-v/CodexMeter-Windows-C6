@@ -56,7 +56,7 @@ def summarize(message: str, max_chars: int = 96) -> str:
     text = " ".join(part.strip() for part in text.splitlines() if part.strip())
     text = re.sub(r"\s+", " ", text).strip()
     if not text:
-        text = "Codex 任务已完成"
+        text = "Codex task completed"
     if len(text) <= max_chars:
         return text
     return text[: max_chars - 3].rstrip() + "..."
@@ -152,7 +152,7 @@ def send_task_complete(summary: str, hook_input: dict[str, Any]) -> None:
     event = build_task_event("task_complete", hook_input)
     event.update(
         {
-            "title": "任务完成！",
+            "title": "Task complete!",
             "body": summary,
         }
     )
@@ -173,6 +173,10 @@ def build_task_event(event_type: str, hook_input: dict[str, Any]) -> dict[str, A
 
 def send_event(event: dict[str, Any]) -> None:
     socket_path = Path(os.environ.get("CODEXMETER_SOCKET", str(DEFAULT_SOCKET)))
+    if sys.platform == "win32":
+        from codexmeter.ipc import send_hook
+        send_hook(event, socket_path)
+        return
     payload = json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
         client.settimeout(0.35)

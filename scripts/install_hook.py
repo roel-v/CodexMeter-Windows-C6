@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -26,6 +27,7 @@ def install_hook(
     event_name: str,
     command: str,
     status_message: str,
+    windows: bool = False,
 ) -> bool:
     root = load_hooks(path)
     events = root.setdefault("hooks", {})
@@ -41,6 +43,8 @@ def install_hook(
         "timeout": 5,
         "statusMessage": status_message,
     }
+    if windows:
+        hook["commandWindows"] = command
     entry = {"matcher": "", "hooks": [hook]}
 
     for existing_entry in entries:
@@ -67,14 +71,24 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--hooks-json", default=str(Path.home() / ".codex" / "hooks.json"))
     parser.add_argument("--event", default="Stop")
-    parser.add_argument("--command", required=True)
+    commands = parser.add_mutually_exclusive_group(required=True)
+    commands.add_argument("--command")
+    commands.add_argument("--windows-python")
+    parser.add_argument("--script")
     parser.add_argument("--status-message", default="Updating CodexMeter")
+    parser.add_argument("--windows", action="store_true")
     args = parser.parse_args()
+    if args.windows_python:
+        if not args.script:
+            parser.error("--windows-python requires --script")
+        args.command = subprocess.list2cmdline([args.windows_python, args.script])
+        args.windows = True
     changed = install_hook(
         Path(args.hooks_json),
         args.event,
         args.command,
         args.status_message,
+        windows=args.windows,
     )
     print("installed" if changed else "already-installed")
     return 0

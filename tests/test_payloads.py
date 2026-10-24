@@ -89,7 +89,7 @@ def test_screen_control_payload_shape_and_size():
 
 
 def test_sanitize_device_text_falls_back_when_empty():
-    assert sanitize_device_text("\n\t\r") == "Codex 任务已完成"
+    assert sanitize_device_text("\n\t\r") == "Codex task completed"
 
 
 def test_alert_payload_can_use_full_512_byte_protocol_limit():

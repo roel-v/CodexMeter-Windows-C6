@@ -35,7 +35,7 @@ async def run_status(_args: argparse.Namespace) -> int:
 
 async def run_demo_alert(args: argparse.Namespace) -> int:
     result = await send_event(
-        {"type": "alert", "title": "任务完成！", "body": args.message}
+        {"type": "alert", "title": "Task complete!", "body": args.message}
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result.get("ok") else 1
@@ -175,7 +175,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     status.set_defaults(func=run_status)
 
     alert = sub.add_parser("demo-alert", help="Queue a demo task-complete alert.")
-    alert.add_argument("message", nargs="?", default="Codex 已完成一个测试任务")
+    alert.add_argument("message", nargs="?", default="Codex completed a test task")
     alert.set_defaults(func=run_demo_alert)
 
     usage = sub.add_parser("demo-usage", help="Queue a demo usage payload.")

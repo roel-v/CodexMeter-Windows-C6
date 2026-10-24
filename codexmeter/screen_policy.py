@@ -108,6 +108,36 @@ class MacLockDetector:
         return parse_ioreg_lock_state(stdout.decode("utf-8", errors="replace"))
 
 
+class WindowsLockDetector:
+    """Detect an unavailable interactive desktop (lock or secure desktop)."""
+
+    async def is_locked(self) -> bool | None:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        user32.OpenInputDesktop.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        user32.OpenInputDesktop.restype = wintypes.HANDLE
+        user32.CloseDesktop.argtypes = [wintypes.HANDLE]
+        user32.CloseDesktop.restype = wintypes.BOOL
+        user32.GetUserObjectInformationW.argtypes = [
+            wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        user32.GetUserObjectInformationW.restype = wintypes.BOOL
+        desktop = user32.OpenInputDesktop(0, False, 1)  # DESKTOP_READOBJECTS
+        if not desktop:
+            return True if ctypes.get_last_error() == 5 else None
+        try:
+            name = ctypes.create_unicode_buffer(256)
+            needed = wintypes.DWORD()
+            if not user32.GetUserObjectInformationW(desktop, 2, name, ctypes.sizeof(name), ctypes.byref(needed)):
+                return None
+            return name.value.lower() != "default"
+        finally:
+            user32.CloseDesktop(desktop)
+
+
 def parse_ioreg_lock_state(text: str) -> bool | None:
     match = re.search(r'"IOConsoleLocked"\s*=\s*(Yes|No)', text)
     if match:
@@ -127,16 +157,16 @@ async def screen_policy_loop(
     *,
     timeout_sec: float = AUTO_SCREEN_TIMEOUT_SEC,
     poll_interval_sec: float = LOCK_POLL_INTERVAL_SEC,
-    detector: MacLockDetector | None = None,
+    detector: MacLockDetector | WindowsLockDetector | None = None,
     connect_control_setter: Callable[[Payload | None], None] | None = None,
 ) -> None:
-    detector = detector or MacLockDetector()
+    detector = detector or (WindowsLockDetector() if sys.platform == "win32" else MacLockDetector())
     policy = LockScreenPolicy(timeout_sec=timeout_sec)
 
     while not stop_event.is_set():
         locked = await detector.is_locked()
         if locked is None:
-            log.debug("macOS lock state unavailable; keeping previous screen policy")
+            log.debug("Host lock state unavailable; keeping previous screen policy")
         else:
             result = policy.observe(
                 locked,

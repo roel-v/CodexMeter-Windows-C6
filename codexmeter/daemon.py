@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import fcntl
 import json
 import logging
 import os
 import signal
 import sys
 import time
+import threading
 from collections.abc import Awaitable, Callable
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -51,6 +51,11 @@ from .settings import (
 )
 from .supervision import supervise
 
+if sys.platform == "win32":
+    import msvcrt
+else:
+    import fcntl
+
 USAGE_CACHE_FILE = APP_DIR / "last_usage_snapshot.json"
 PayloadSink = Callable[[Payload], Awaitable[None]]
 
@@ -68,8 +73,12 @@ class DaemonLock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         handle = self.path.open("a+", encoding="ascii")
         try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
+            if sys.platform == "win32":
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
             handle.close()
             raise DaemonAlreadyRunning("CodexMeter daemon is already running") from exc
         handle.seek(0)
@@ -84,7 +93,11 @@ class DaemonLock:
             return
         handle = self.handle
         self.handle = None
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        if sys.platform == "win32":
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         handle.close()
 
 
@@ -262,7 +275,7 @@ def build_stale_usage_payload(payload: Payload, now: int | None = None) -> Paylo
     return Payload("usage", data)
 
 
-async def run_daemon(args: argparse.Namespace) -> None:
+async def run_daemon(args: argparse.Namespace, desktop=None) -> None:
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
 
@@ -270,7 +283,11 @@ async def run_daemon(args: argparse.Namespace) -> None:
         logging.info("Stopping CodexMeter daemon")
         stop_event.set()
 
-    for sig in (signal.SIGINT, signal.SIGTERM):
+    if desktop is not None:
+        desktop.bind_shutdown(lambda: loop.call_soon_threadsafe(stop))
+
+    signals = (signal.SIGINT, signal.SIGTERM) if threading.current_thread() is threading.main_thread() else ()
+    for sig in signals:
         try:
             loop.add_signal_handler(sig, stop)
         except NotImplementedError:
@@ -330,7 +347,15 @@ async def run_daemon(args: argparse.Namespace) -> None:
         await manager.broadcast(payload)
 
     def status_provider() -> dict[str, object]:
-        return {"ble": manager.status()}
+        status = {"ble": manager.status()}
+        if desktop is not None:
+            status["tray"] = desktop.snapshot
+        return status
+
+    async def tray_status_loop():
+        while not stop_event.is_set():
+            desktop.publish_status(manager.status())
+            await asyncio.sleep(1)
 
     event_server = EventServer(
         sink,
@@ -338,11 +363,13 @@ async def run_daemon(args: argparse.Namespace) -> None:
         activity_ttl=args.activity_ttl,
         activity_sweep_interval=args.activity_sweep_interval,
         verify_task_starts=True,
+        open_control_panel=desktop.open_control_panel if desktop is not None else None,
     )
 
     await supervise(
         stop_event,
         {
+            **({"tray_status": tray_status_loop()} if desktop is not None else {}),
             "events": event_server.run(stop_event),
             "quota": quota_loop(provider, sink, stop_event, args.poll_interval),
             "screen_policy": screen_policy_loop(
@@ -415,6 +442,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--refresh-token", action="store_true")
     parser.add_argument("--log-level", default="INFO")
     parser.add_argument("--foreground", action="store_true")
+    parser.add_argument("--show-control-panel", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -423,8 +451,17 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging(args.log_level, foreground=args.foreground)
     try:
         with DaemonLock():
-            asyncio.run(run_daemon(args))
+            if sys.platform == "win32":
+                from .windows_tray import WindowsTray
+                desktop = WindowsTray(show_panel=args.show_control_panel)
+                desktop.run(lambda: asyncio.run(run_daemon(args, desktop)))
+            else:
+                asyncio.run(run_daemon(args))
     except DaemonAlreadyRunning as exc:
+        if sys.platform == "win32" and args.show_control_panel:
+            from .windows_tray import open_existing_panel
+            if open_existing_panel():
+                return 0
         logging.error("%s", exc)
         return 1
     except KeyboardInterrupt:

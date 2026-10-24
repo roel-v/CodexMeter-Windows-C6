@@ -23,7 +23,7 @@ def test_stop_hook_succeeds_when_daemon_is_offline(tmp_path):
         ),
         text=True,
         capture_output=True,
-        env={"CODEXMETER_SOCKET": str(missing_socket)},
+        env={**os.environ, "CODEXMETER_SOCKET": str(missing_socket)},
         timeout=2,
         check=False,
     )
@@ -44,7 +44,7 @@ def test_start_hook_succeeds_when_daemon_is_offline(tmp_path):
         ),
         text=True,
         capture_output=True,
-        env={"CODEXMETER_SOCKET": str(missing_socket)},
+        env={**os.environ, "CODEXMETER_SOCKET": str(missing_socket)},
         timeout=2,
         check=False,
     )
@@ -311,5 +311,5 @@ def test_stop_hook_keeps_regular_completion_alerts():
     )
 
     assert received[0]["type"] == "task_complete"
-    assert received[0]["title"] == "任务完成！"
+    assert received[0]["title"] == "Task complete!"
     assert received[0]["body"] == "已完成实现。 测试也通过了。"

@@ -10,7 +10,11 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
+from pathlib import Path
 import shutil
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -28,6 +32,18 @@ class AppServerError(RuntimeError):
     """Raised when Codex App Server cannot be queried."""
 
 
+def resolve_codex_binary(command: str = "codex") -> str | None:
+    resolved = shutil.which(command)
+    if resolved and not (sys.platform == "win32" and resolved.lower().endswith((".cmd", ".bat"))):
+        return resolved
+    if sys.platform == "win32" and command == "codex":
+        root = Path(os.environ.get("LOCALAPPDATA", "")) / "OpenAI" / "Codex" / "bin"
+        candidates = list(root.glob("*/codex.exe")) if root.is_dir() else []
+        if candidates:
+            return str(max(candidates, key=lambda path: path.stat().st_mtime))
+    return resolved
+
+
 @dataclass
 class JsonRpcClient:
     codex_bin: str = "codex"
@@ -39,17 +55,21 @@ class JsonRpcClient:
     stderr_task: asyncio.Task[None] | None = None
 
     async def __aenter__(self) -> "JsonRpcClient":
-        if shutil.which(self.codex_bin) is None:
+        if resolve_codex_binary(self.codex_bin) is None:
             raise AppServerError(f"Cannot find `{self.codex_bin}` in PATH.")
 
+        executable = resolve_codex_binary(self.codex_bin)
+        if sys.platform == "win32" and executable and executable.lower().endswith((".cmd", ".bat")):
+            raise AppServerError("Use the native codex.exe path with --codex-bin, rather than the npm .cmd wrapper.")
         self.proc = await asyncio.create_subprocess_exec(
-            self.codex_bin,
+            executable or self.codex_bin,
             "app-server",
             "--listen",
             "stdio://",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            **({"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}),
         )
         self.stderr_task = asyncio.create_task(self._read_stderr())
         return self

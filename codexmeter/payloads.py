@@ -79,13 +79,13 @@ def build_screen_control_payload(
 
 def build_alert_payload(
     body: str,
-    title: str = "任务完成！",
+    title: str = "Task complete!",
     event_id: str | None = None,
     now: int | None = None,
     running_count: int | None = None,
 ) -> Payload:
     title_text = truncate_text(
-        sanitize_device_text(clean_summary(title), fallback="任务完成！"),
+        sanitize_device_text(clean_summary(title), fallback="Task complete!"),
         max_chars=MAX_ALERT_TITLE_CHARS,
         max_bytes=MAX_ALERT_TITLE_BYTES,
     )
@@ -127,10 +127,10 @@ def encode_payload(data: dict[str, Any]) -> bytes:
 
 def clean_summary(text: str) -> str:
     compact = " ".join(line.strip() for line in text.splitlines() if line.strip())
-    return compact or "Codex 任务已完成"
+    return compact or "Codex task completed"
 
 
-def sanitize_device_text(text: str, fallback: str = "Codex 任务已完成") -> str:
+def sanitize_device_text(text: str, fallback: str = "Codex task completed") -> str:
     """Remove control characters while preserving Unicode text for TinyTTF."""
 
     cleaned = "".join(ch if is_display_text_char(ch) else " " for ch in text)
