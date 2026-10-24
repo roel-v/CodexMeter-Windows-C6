@@ -341,13 +341,22 @@ async def run_daemon(args: argparse.Namespace, desktop=None) -> None:
         fallback_when_empty=not registry.devices,
         identity_observer=bind_identity,
     )
-    await manager.broadcast(build_activity_payload(0))
+    from .chat_activity import ChatActivity
+    chats = ChatActivity() if sys.platform == "win32" else None
+    await manager.broadcast(chats.payload if chats else build_activity_payload(0))
 
     async def sink(payload: Payload) -> None:
+        if chats is not None and payload.kind == "activity":
+            payload = chats.payload
+        elif chats is not None and payload.kind == "alert":
+            # Hook completion counts must not overwrite live desktop counts.
+            payload = Payload(payload.kind, {k: v for k, v in payload.data.items() if k != "run"})
         await manager.broadcast(payload)
 
     def status_provider() -> dict[str, object]:
         status = {"ble": manager.status()}
+        if chats is not None:
+            status["chat_activity"] = dict(chats.status)
         if desktop is not None:
             status["tray"] = desktop.snapshot
         return status
@@ -369,6 +378,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None) -> None:
     await supervise(
         stop_event,
         {
+            **({"chat_activity": chats.run(manager.broadcast, stop_event)} if chats else {}),
             **({"tray_status": tray_status_loop()} if desktop is not None else {}),
             "events": event_server.run(stop_event),
             "quota": quota_loop(provider, sink, stop_event, args.poll_interval),
