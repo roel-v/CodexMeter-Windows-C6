@@ -1,5 +1,10 @@
 # CodexMeter
 
+> **Windows + ESP32-C6 port:** English setup, the Windows control panel and the
+> `ESP32-C6-Touch-AMOLED-2.16(-EN)` firmware target are documented in
+> [README.windows.md](README.windows.md). The upstream macOS/S3 documentation
+> below is retained for reference. Do not use its S3 flashing instructions for a C6.
+
 [![Python Tests](https://github.com/tomatoeggs/CodexMeter/actions/workflows/python-tests.yml/badge.svg)](https://github.com/tomatoeggs/CodexMeter/actions/workflows/python-tests.yml)
 [![Latest tag](https://img.shields.io/github/v/tag/tomatoeggs/CodexMeter?sort=semver)](https://github.com/tomatoeggs/CodexMeter/tags)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
