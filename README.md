@@ -1,5 +1,11 @@
 # CodexMeter — Windows & ESP32-C6
 
+<p align="center">
+  <img src="docs/assets/windows-c6/device-photo.jpg" width="480" alt="CodexMeter running the Classic Tasks theme on a Waveshare ESP32-C6 AMOLED display in a printed desktop enclosure">
+  <br>
+  <em>Classic Tasks running on the actual Waveshare C6 display.</em>
+</p>
+
 An English Windows companion and Waveshare ESP32-C6 port of
 [tomatoeggs/CodexMeter](https://github.com/tomatoeggs/CodexMeter).
 Keep your Codex quota, local token activity and chat status on a small AMOLED
