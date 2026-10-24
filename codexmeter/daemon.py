@@ -342,6 +342,11 @@ async def run_daemon(args: argparse.Namespace, desktop=None) -> None:
         identity_observer=bind_identity,
     )
     from .chat_activity import ChatActivity
+    recovery = None
+    if sys.platform == "win32":
+        from .bluetooth_recovery import BluetoothRecovery
+        recovery = BluetoothRecovery(manager.status)
+        manager.discovery.after_scan = recovery.observe
     chats = ChatActivity() if sys.platform == "win32" else None
     await manager.broadcast(chats.payload if chats else build_activity_payload(0))
 
@@ -355,6 +360,8 @@ async def run_daemon(args: argparse.Namespace, desktop=None) -> None:
 
     def status_provider() -> dict[str, object]:
         status = {"ble": manager.status()}
+        if recovery is not None:
+            status["bluetooth_recovery"] = recovery.status()
         if chats is not None:
             status["chat_activity"] = dict(chats.status)
         if desktop is not None:

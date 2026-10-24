@@ -71,13 +71,16 @@ class DiscoveryService:
         self.scan_interval_sec = scan_interval_sec
         self.max_age_sec = max_age_sec
         self._connected_lookup: MacConnectedDeviceLookup | None = None
+        self.raw_result_count: int | None = None
+        self.after_scan = None
         if scanner is None:
             connected_lookup = MacConnectedDeviceLookup()
             self._connected_lookup = connected_lookup
 
             async def scan_with_connected(timeout: float) -> list[DiscoveredDevice]:
                 return await scan_codexmeter_devices(
-                    timeout, connected_lookup=connected_lookup
+                    timeout, connected_lookup=connected_lookup,
+                    raw_count_observer=lambda count: setattr(self, "raw_result_count", count),
                 )
 
             self._scanner = scan_with_connected
@@ -97,8 +100,16 @@ class DiscoveryService:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                self.raw_result_count = None
                 self._last_error = str(exc)
                 log.warning("BLE discovery failed: %s", exc)
+            if self.after_scan is not None:
+                try:
+                    await self.after_scan(self.raw_result_count)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    log.exception("Bluetooth recovery monitor failed")
             await _sleep_or_stop(stop_event, self.scan_interval_sec)
 
     async def scan_once(self) -> list[DiscoveredDevice]:
@@ -127,6 +138,7 @@ class DiscoveryService:
         return {
             "last_scan_age_sec": scan_age,
             "last_result_count": self._last_result_count,
+            "raw_result_count": self.raw_result_count,
             "connected_result_count": self._last_connected_result_count,
             "cached_count": len(self._devices),
             "last_error": self._last_error,
@@ -387,6 +399,7 @@ async def scan_codexmeter_devices(
     *,
     discover: Callable[..., Awaitable[dict[str, Any]]] | None = None,
     connected_lookup: Callable[[], Awaitable[list[Any]]] | None = None,
+    raw_count_observer: Callable[[int], None] | None = None,
 ) -> list[DiscoveredDevice]:
     if discover is None:
         try:
@@ -398,6 +411,8 @@ async def scan_codexmeter_devices(
         connected_lookup = MacConnectedDeviceLookup()
 
     raw = await discover(timeout=timeout, return_adv=True)
+    if raw_count_observer is not None:
+        raw_count_observer(len(raw))
     result: dict[str, DiscoveredDevice] = {}
     for address, item in raw.items():
         device, adv = item
