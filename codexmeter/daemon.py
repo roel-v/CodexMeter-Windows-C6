@@ -275,7 +275,7 @@ def build_stale_usage_payload(payload: Payload, now: int | None = None) -> Paylo
     return Payload("usage", data)
 
 
-async def run_daemon(args: argparse.Namespace, desktop=None) -> None:
+async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -> None:
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
 
@@ -385,6 +385,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None) -> None:
     await supervise(
         stop_event,
         {
+            **({"diagnostics": diagnostics.heartbeat(stop_event, desktop)} if diagnostics else {}),
             **({"chat_activity": chats.run(manager.broadcast, stop_event)} if chats else {}),
             **({"tray_status": tray_status_loop()} if desktop is not None else {}),
             "events": event_server.run(stop_event),
@@ -468,12 +469,14 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging(args.log_level, foreground=args.foreground)
     try:
         with DaemonLock():
-            if sys.platform == "win32":
-                from .windows_tray import WindowsTray
-                desktop = WindowsTray(show_panel=args.show_control_panel)
-                desktop.run(lambda: asyncio.run(run_daemon(args, desktop)))
-            else:
-                asyncio.run(run_daemon(args))
+            from .diagnostics import RunDiagnostics
+            with RunDiagnostics(APP_DIR / "diagnostics") as diagnostics:
+                if sys.platform == "win32":
+                    from .windows_tray import WindowsTray
+                    desktop = WindowsTray(show_panel=args.show_control_panel)
+                    desktop.run(lambda: asyncio.run(run_daemon(args, desktop, diagnostics)))
+                else:
+                    asyncio.run(run_daemon(args, diagnostics=diagnostics))
     except DaemonAlreadyRunning as exc:
         if sys.platform == "win32" and args.show_control_panel:
             from .windows_tray import open_existing_panel
