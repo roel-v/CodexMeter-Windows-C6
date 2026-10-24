@@ -421,6 +421,11 @@ static void handle_json(const char* json) {
   if (kind != PAYLOAD_NONE) {
     last_host_payload_ms = millis();
   }
+  if (kind == PAYLOAD_USAGE || kind == PAYLOAD_ACTIVITY || kind == PAYLOAD_ALERT) {
+    const bool was_waiting = ui_is_waiting();
+    ui_set_waiting(false);
+    if (was_waiting) set_screen_on(true, "companion_data");
+  }
   if (kind == PAYLOAD_USAGE) {
     last_usage_ms = millis();
     ui_update_usage(usage);
@@ -691,10 +696,10 @@ static void handle_serial() {
             last_host_payload_ms == 0 ? 0 : now - last_host_payload_ms;
         uint32_t usage_age = last_usage_ms == 0 ? 0 : now - last_usage_ms;
         Serial.printf(
-            "HEALTH screen=%d ble=%d host_age_ms=%lu usage_age_ms=%lu wdt=%d\n",
+            "HEALTH screen=%d ble=%d host_age_ms=%lu usage_age_ms=%lu wdt=%d waiting=%d\n",
             screen_on ? 1 : 0, ble_service_connected() ? 1 : 0,
             (unsigned long)host_age, (unsigned long)usage_age,
-            watchdog_enabled ? 1 : 0);
+            watchdog_enabled ? 1 : 0, ui_is_waiting() ? 1 : 0);
       } else if (strcmp(buf, "rotate auto") == 0) {
         imu_set_auto_rotation(true);
       } else if (strncmp(buf, "rotate ", 7) == 0) {
@@ -813,37 +818,13 @@ static void handle_button() {
 }
 
 static void handle_ble_screen_policy() {
-  static bool was_connected = false;
-  static uint32_t disconnected_since_ms = 0;
-  static bool disconnect_screen_off_sent = false;
-  static bool host_stale_screen_off_sent = false;
-
-  bool connected = ble_service_connected();
-  uint32_t now = millis();
-  if (last_host_payload_ms != 0 &&
-      now - last_host_payload_ms < CODEXMETER_HOST_STALE_SCREEN_AFTER_MS) {
-    host_stale_screen_off_sent = false;
+  // A BLE link alone is not proof that the companion is supplying data.
+  // Keep the boot screen until the first valid data payload, and return to it
+  // on disconnection or a silent/stalled host. Never override manual power-off.
+  if (!ble_service_connected() || last_host_payload_ms == 0 ||
+      millis() - last_host_payload_ms >= CODEXMETER_HOST_STALE_SCREEN_AFTER_MS) {
+    ui_set_waiting(true);
   }
-  if (connected) {
-    disconnected_since_ms = 0;
-    disconnect_screen_off_sent = false;
-  } else if (was_connected || disconnected_since_ms == 0) {
-    disconnected_since_ms = now;
-    disconnect_screen_off_sent = false;
-  } else if (!disconnect_screen_off_sent &&
-             now - disconnected_since_ms >= CODEXMETER_AUTO_SCREEN_AFTER_MS) {
-    set_screen_on(false, "ble_timeout");
-    disconnect_screen_off_sent = true;
-  }
-  if (last_host_payload_ms != 0 && !host_stale_screen_off_sent &&
-      now - last_host_payload_ms >= CODEXMETER_HOST_STALE_SCREEN_AFTER_MS) {
-    device_logf(
-        "WARN", "host stale age_ms=%lu ble=%d",
-        (unsigned long)(now - last_host_payload_ms), connected ? 1 : 0);
-    set_screen_on(false, "host_stale");
-    host_stale_screen_off_sent = true;
-  }
-  was_connected = connected;
 }
 
 void setup() {
@@ -874,7 +855,6 @@ void setup() {
   refresh_battery_ui(true);
   ble_service_init();
   ble_service_request_refresh();
-  last_host_payload_ms = millis();
   device_log_heap("setup_done");
   device_logf("INFO", "setup complete");
 }

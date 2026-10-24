@@ -14,6 +14,8 @@ void ui_set_battery(int pct, bool charging);
 void ui_show_brightness(int pct);
 void ui_tick();
 
+void ui_set_waiting(bool waiting);
+bool ui_is_waiting();
 void ui_set_display_active(bool active);
 void ui_middle_short_press();
 void ui_settings_move(int direction);

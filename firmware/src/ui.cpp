@@ -6,6 +6,7 @@
 
 #include "codexmeter_montserrat_medium_ttf.inc"
 #include "config.h"
+#include "battery_status.h"
 #include "dashboard_view_model.h"
 #include "device_log.h"
 #include "device_settings.h"
@@ -68,6 +69,11 @@ const char* const SETTING_LABELS[SETTINGS_ITEM_COUNT] = {
 
 lv_obj_t* screen = nullptr;
 lv_obj_t* theme_host = nullptr;
+lv_obj_t* waiting_layer = nullptr;
+lv_obj_t* waiting_power = nullptr;
+lv_obj_t* waiting_icon = nullptr;
+lv_obj_t* waiting_fill = nullptr;
+bool waiting_for_companion = true;
 lv_obj_t* alert_layer = nullptr;
 lv_obj_t* alert_title = nullptr;
 lv_obj_t* alert_body = nullptr;
@@ -171,6 +177,66 @@ lv_obj_t* make_label(
   lv_obj_set_style_text_color(label, color, 0);
   lv_obj_set_style_text_letter_space(label, 0, 0);
   return label;
+}
+
+void refresh_waiting_power() {
+  if (!waiting_power) return;
+  const bool usb = app_battery_percent == BATTERY_USB_POWER;
+  char text[16];
+  if (app_battery_percent >= 0) {
+    snprintf(text, sizeof(text), "%d%%", app_battery_percent);
+  } else {
+    snprintf(text, sizeof(text), "%s", battery_unavailable_text(app_battery_percent, app_charging));
+  }
+  lv_label_set_text(waiting_power, text);
+  lv_obj_update_layout(waiting_power);
+  const int width = lv_obj_get_width(waiting_power);
+  const int left = (CODEXMETER_SCREEN_W - width - 14 - 31) / 2;
+  lv_obj_set_pos(waiting_power, left, 229);
+  lv_obj_set_pos(waiting_icon, left + width + 14, 234);
+  int fill = usb ? 18 : (app_battery_percent > 0 ? 18 * app_battery_percent / 100 : 0);
+  lv_obj_set_width(waiting_fill, fill > 0 ? fill : 1);
+  lv_obj_set_style_bg_opa(waiting_fill, fill > 0 ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+  lv_obj_set_style_bg_color(waiting_fill,
+      lv_color_hex(usb || app_charging || app_battery_percent > 20 ? 0x2fda77 : 0xffd43b), 0);
+}
+
+void make_waiting_layer() {
+  waiting_layer = lv_obj_create(screen);
+  strip_obj(waiting_layer);
+  base_style(waiting_layer);
+  lv_obj_set_size(waiting_layer, CODEXMETER_SCREEN_W, CODEXMETER_SCREEN_H);
+  lv_obj_set_pos(waiting_layer, 0, 0);
+  auto title = make_label(waiting_layer, "CodexMeter", &lv_font_montserrat_32, CODEX_BLUE);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 181);
+  waiting_power = make_label(waiting_layer, "USB", &lv_font_montserrat_24, DIM);
+  waiting_icon = lv_obj_create(waiting_layer);
+  strip_obj(waiting_icon);
+  lv_obj_set_size(waiting_icon, 31, 18);
+  auto body = lv_obj_create(waiting_icon);
+  strip_obj(body);
+  lv_obj_set_size(body, 25, 16);
+  lv_obj_set_pos(body, 0, 1);
+  lv_obj_set_style_radius(body, 3, 0);
+  lv_obj_set_style_border_width(body, 2, 0);
+  lv_obj_set_style_border_color(body, DIM, 0);
+  lv_obj_set_style_border_opa(body, LV_OPA_COVER, 0);
+  waiting_fill = lv_obj_create(body);
+  strip_obj(waiting_fill);
+  lv_obj_set_size(waiting_fill, 18, 8);
+  lv_obj_set_pos(waiting_fill, 3, 4);
+  lv_obj_set_style_radius(waiting_fill, 1, 0);
+  auto cap = lv_obj_create(waiting_icon);
+  strip_obj(cap);
+  lv_obj_set_size(cap, 4, 8);
+  lv_obj_set_pos(cap, 27, 5);
+  lv_obj_set_style_radius(cap, 1, 0);
+  lv_obj_set_style_bg_color(cap, DIM, 0);
+  lv_obj_set_style_bg_opa(cap, LV_OPA_COVER, 0);
+  auto message = make_label(waiting_layer, "Waiting for companion app", &lv_font_montserrat_16, DIM);
+  lv_obj_align(message, LV_ALIGN_TOP_MID, 0, 274);
+  refresh_waiting_power();
+  lv_obj_add_flag(theme_host, LV_OBJ_FLAG_HIDDEN);
 }
 
 void log_lvgl_mem(const char* phase) {
@@ -392,6 +458,7 @@ void apply_burn_in_drift(const DriftOffset& offset) {
   int x = clamp_drift_offset(offset.x);
   int y = clamp_drift_offset(offset.y);
   lv_obj_set_pos(theme_host, x, y);
+  if (waiting_layer) lv_obj_set_pos(waiting_layer, x, y);
   lv_obj_invalidate(screen);
   device_logf("INFO", "burn_in_drift x=%d y=%d", x, y);
 }
@@ -429,7 +496,7 @@ bool perform_theme_switch(const char* id, bool persist) {
 
   lv_obj_add_flag(theme_host, LV_OBJ_FLAG_HIDDEN);
   bool exact_switch = theme_runtime.switch_to(id);
-  lv_obj_clear_flag(theme_host, LV_OBJ_FLAG_HIDDEN);
+  if (!waiting_for_companion) lv_obj_clear_flag(theme_host, LV_OBJ_FLAG_HIDDEN);
   lv_obj_set_pos(theme_host, 0, 0);
   drift_index = 0;
   drift_last_ms = millis();
@@ -689,6 +756,7 @@ void ui_init(const UiSystemHooks& hooks) {
   refresh_dashboard_model(millis());
   theme_runtime.switch_to(device_settings_get().theme_id);
 
+  make_waiting_layer();
   make_alert_layer();
   make_brightness_overlay();
   make_settings_layer();
@@ -749,6 +817,7 @@ void ui_show_alert(const AlertModel& alert) {
 void ui_set_battery(int pct, bool charging) {
   app_battery_percent = pct;
   app_charging = charging;
+  refresh_waiting_power();
   if (display_active) refresh_dashboard_model(millis());
 }
 
@@ -773,7 +842,7 @@ void ui_tick() {
        now - app_activity.received_ms >= 15000UL)) {
     refresh_dashboard_model(now);
   }
-  theme_runtime.tick(now);
+  if (!waiting_for_companion) theme_runtime.tick(now);
   tick_burn_in_drift(now);
 
   if (brightness_active &&
@@ -791,7 +860,7 @@ void ui_tick() {
 
   bool eligible =
       display_active && !alert_active && !settings_active &&
-      !brightness_active;
+      !brightness_active && !waiting_for_companion;
   if (eligible != rotation_eligible) {
     rotation_eligible = eligible;
     rotation_policy.set_eligible(eligible, now);
@@ -843,6 +912,25 @@ void ui_tick() {
       now - alert_started_ms >= CODEXMETER_ALERT_HOLD_MS) {
     ui_dismiss_alert();
   }
+}
+
+void ui_set_waiting(bool waiting) {
+  if (waiting_for_companion == waiting) return;
+  waiting_for_companion = waiting;
+  if (waiting) {
+    ui_dismiss_alert();
+    lv_obj_add_flag(theme_host, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(waiting_layer, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    refresh_dashboard_model(millis());
+    lv_obj_add_flag(waiting_layer, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(theme_host, LV_OBJ_FLAG_HIDDEN);
+  }
+  device_logf("INFO", "companion waiting=%d", waiting ? 1 : 0);
+}
+
+bool ui_is_waiting() {
+  return waiting_for_companion;
 }
 
 void ui_set_display_active(bool active) {
