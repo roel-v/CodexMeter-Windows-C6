@@ -63,7 +63,7 @@ refreshes the real reading and clears a simulated battery display. Hardware
 validation for all 11 themes is retained in `dist/c6/usb-indicator-validation-final`;
 an attached physical battery was not available for this test.
 
-No touch or audio implementation was added. The firmware does not introduce a
+C6 touch navigation was added for Classic Tasks; audio is not implemented. The firmware does not introduce a
 new API key or authentication store on the device. See the Windows setup guide
 for the limits of local token counts and supported hook environments.
 

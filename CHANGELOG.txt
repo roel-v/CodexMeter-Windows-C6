@@ -1,0 +1,60 @@
+CodexMeter Windows/C6 changelog
+
+Entries are grouped by release date, newest first. Bundle dates identify the
+combined Windows application and C6 firmware release; application file versions
+are recorded separately.
+
+2026-11-01 — windows-c6-2026.11.01 (Windows 3.12.2.1)
+Changes since the first release on 2026-10-24:
+
+- Add a second Classic Tasks screen with uncached input, cached input and output
+  token counts, plus Standard API-equivalent USD estimates for each category.
+- Add touch swipes between the dashboard and details page, and Today / 7 days
+  selection on the details page. Touch coordinates follow display rotation.
+- Add API cost summaries to the dashboard. Mark incomplete estimates with a +
+  and explicitly identify unpriced usage instead of inventing model rates.
+- Attribute local usage to recorded turn models and deduplicate response IDs.
+  Account for cached input separately and select short/long-context rates.
+- Add a desktop Tokens / pricing panel with model totals, coverage information
+  and dated pricing history. Earlier estimates retain their applicable rates.
+- Check the official pricing source daily and warn when its content changes.
+  Saved rates remain active until review; a page change need not mean rates changed.
+- Open a small explanation/comparison dialog when a tray notification is clicked.
+  Also expose it through the Pricing source status tray menu item.
+- Preserve earlier pricing revisions when accepting a reviewed source update.
+  Download/parser failures retain saved rates and report a distinct check failure.
+- Align the existing Codex / Token usage / USB header and improve token spacing.
+- Center Today and 7 days at one-quarter and three-quarters of the display width.
+- Show reset countdowns in days and hours, or hours and minutes below one day,
+  retaining the bright readable font.
+- Replace the README header image with current screenshots of both Classic Tasks
+  screens, and document touch navigation, cost coverage and pricing review.
+- Extend Python regression, standalone runtime and native tray-click checks, and
+  add C6 screenshot/page-switching/rotation diagnostics.
+
+Validation: 190 Python tests passed. The standalone package passed GUI, native
+tray notification-click, subprocess, WinRT, DPAPI and live-usage checks. C6 firmware
+was flashed and both countdown formats and both pages were captured on hardware.
+Serial gesture injection tests UI behavior; it does not substitute for physical
+finger testing. No clean Windows VM validation has been performed.
+
+2026-10-24 — windows-c6-2026.10.24 (Windows 3.12.1.5)
+Initial public Windows/C6 release, based on tomatoeggs/CodexMeter:
+
+- English Windows control panel, system tray and Bluetooth LE companion.
+- Standalone Nuitka executable with no separate Python installation needed to run.
+- Optional login startup and automatic discovery of Codex's versioned executable.
+- Waveshare ESP32-C6-Touch-AMOLED-2.16(-EN) support, corrected four-way automatic
+  rotation, static fonts, flash-mapped artwork and small buffers for limited RAM.
+- All 11 original themes adapted for C6, plus Classic Tasks with running, awaiting
+  input/approval, and completed-but-unread chat counts.
+- Local token totals, quota display and improved reset-text readability/spacing.
+- USB power indication when no battery is connected.
+- A three-line powered-on waiting screen at boot and when companion data stops.
+- Bounded Bluetooth discovery recovery and local lifecycle, heartbeat and fault
+  diagnostics. No automatic application restart machinery.
+- Complete C6 factory firmware image with theme artwork, standalone Windows
+  executable, setup instructions and SHA-256 checksums as release downloads.
+- Fork documentation, actual device photo/screenshots and preserved upstream README.
+
+Original project history, license and artwork attribution remain in the repository.

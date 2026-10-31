@@ -208,7 +208,7 @@ after loading `scripts/windows-env.ps1`, then run
 Controls: **KEY/IO10** decreases brightness or moves left; **BOOT/IO9** increases
 brightness or moves right; long presses select the previous/next theme.
 The middle **PWR** button opens/confirms settings; a long press toggles the
-display. Touch input and audio are not implemented by this port.
+display. Classic Tasks supports touch navigation; audio is not implemented.
 
 C6 auto-rotation reverses the sensor Y axis and applies a permanent 90-degree
 counterclockwise correction for the IMU-to-panel alignment. The sideways

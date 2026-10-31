@@ -1,10 +1,15 @@
 # CodexMeter — Windows & ESP32-C6
 
-<p align="center">
-  <img src="docs/assets/windows-c6/device-photo.jpg" width="480" alt="CodexMeter running the Classic Tasks theme on a Waveshare ESP32-C6 AMOLED display in a printed desktop enclosure">
-  <br>
-  <em>Classic Tasks running on the actual Waveshare C6 display.</em>
-</p>
+<table>
+  <tr><th>Classic Tasks — dashboard</th><th>Classic Tasks — token details</th></tr>
+  <tr>
+    <td><img src="docs/assets/windows-c6/classic-tasks.png" width="400" alt="Dashboard with token totals, API cost estimates, weekly quota, days-and-hours reset countdown and chat counts"></td>
+    <td><img src="docs/assets/windows-c6/token-details.png" width="400" alt="Token details with Today and 7 days selection, uncached input, cached input, output and API cost estimates"></td>
+  </tr>
+</table>
+
+Actual C6 screenshots. Swipe horizontally to switch pages; tap **Today** or
+**7 days** on the details page. Values are examples from the capture, not live data.
 
 An English Windows companion and Waveshare ESP32-C6 port of
 [tomatoeggs/CodexMeter](https://github.com/tomatoeggs/CodexMeter).
@@ -17,6 +22,8 @@ It retains the original project's history, license and themes.
 Our maintained branch is **`windows-c6`**.
 
 **[Windows setup and flashing](README.windows.md)** ·
+**[Token details and pricing history](docs/token-pricing.md)** ·
+**[Changelog](CHANGELOG.txt)** ·
 **[Implementation notes](docs/windows-port.md)** ·
 **[Original upstream README (Chinese)](README.upstream.md)**
 
@@ -25,23 +32,24 @@ Our maintained branch is **`windows-c6`**.
 These are actual 480 × 480 screenshots captured from the C6, not mockups.
 The numbers are examples from the capture, not live values.
 
-<table>
-  <tr>
-    <th>Classic Tasks</th>
-    <th>Waiting for the companion</th>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/windows-c6/classic-tasks.png" width="400" alt="Classic Tasks showing local token activity, weekly quota and running, waiting and done chat counts"></td>
-    <td><img src="docs/assets/windows-c6/waiting.png" width="400" alt="Centered CodexMeter title, USB power indicator and Waiting for companion app message"></td>
-  </tr>
-</table>
-
 ### Classic Tasks
 
 An additional variant of the original Classic theme places chat counts in the
 lower-right quarter and the quota reset countdown below the remaining
 percentage. Spacing and reset text were adjusted for readability on the C6.
 The original Classic theme remains available.
+
+Swipe to the second page for uncached input, cached input and output tokens,
+with Standard API-equivalent USD estimates. Tap the centered **Today / 7 days**
+selectors to change period. A **+** means some usage is unpriced; these estimates
+are not subscription charges. The reset countdown shows days and hours, switching
+to hours and minutes below one day.
+
+The desktop **Tokens / pricing** panel shows model attribution and dated pricing
+history. Daily official-source checks warn when the page changes, even when rates
+do not. Click the tray warning to see a comparison with saved rates; accepting a
+reviewed update adds a revision without rewriting history. See
+[token details and pricing](docs/token-pricing.md) for coverage and limitations.
 
 - **Running:** active chats that are not waiting for input or approval.
 - **Waiting:** chats awaiting your input or approval.
@@ -52,6 +60,8 @@ counts does not mark chats read or take control of them. Missing or stale chat
 telemetry shows `--` rather than an invented zero.
 
 ### Powered-on waiting screen
+
+<img src="docs/assets/windows-c6/waiting.png" width="320" alt="CodexMeter title, USB status and Waiting for companion app message">
 
 Before companion data arrives, the screen shows three centered lines:
 **CodexMeter**, the actual USB/battery status, and **Waiting for companion app**.
@@ -128,7 +138,7 @@ machine; the scripts do not silently fall back to another build drive.
   Codex update may require adapting that observer even though executable path
   discovery remains automatic.
 - The C6's static fonts cover the English/Latin UI, not arbitrary Unicode text.
-  Touch input and audio are not implemented by this port.
+  Touch navigation is supported in Classic Tasks; audio is not implemented.
 - The macOS and S3 code paths are retained. The physical hardware used for this
   port's validation is the C6; see the [validation notes](docs/windows-port.md#verification)
   for what was checked and what remains outside that coverage.
