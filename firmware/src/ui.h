@@ -13,6 +13,7 @@ void ui_show_alert(const AlertModel& alert);
 void ui_set_battery(int pct, bool charging);
 void ui_show_brightness(int pct);
 void ui_tick();
+void ui_touch_gesture(int dx, int dy, int x, int y, bool tap);
 
 void ui_set_waiting(bool waiting);
 bool ui_is_waiting();

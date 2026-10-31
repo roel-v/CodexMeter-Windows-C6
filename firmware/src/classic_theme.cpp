@@ -14,7 +14,7 @@ constexpr int PANEL_CONTENT_H = 108;
 constexpr int TOKEN_RIGHT_COLUMN_X = 216;
 constexpr int TOKEN_VALUE_Y_OFFSET = 7;
 constexpr int TOP_TITLE_DEFAULT_Y = 17;
-constexpr int TOP_TITLE_TOKEN_Y = 14;
+constexpr int TOP_TITLE_TOKEN_Y = 21;
 constexpr int ACTIVITY_MAX_DOTS = 12;
 constexpr int ACTIVITY_DOT_SIZE = 10;
 constexpr int ACTIVITY_DOT_GAP = 9;
@@ -56,6 +56,14 @@ struct ClassicThemeState {
   lv_obj_t* d7_pct = nullptr;
   lv_obj_t* d7_reset = nullptr;
   lv_obj_t* task_values[3]{};
+  lv_obj_t* panels[2]{};
+  lv_obj_t* summary_costs[2]{};
+  lv_obj_t* detail = nullptr;
+  lv_obj_t* periods[2]{};
+  lv_obj_t* detail_tokens[4]{};
+  lv_obj_t* detail_costs[4]{};
+  lv_obj_t* detail_note = nullptr;
+  lv_obj_t* page_hint = nullptr;
   bool tasks = false;
   lv_obj_t* activity_dots[ACTIVITY_MAX_DOTS]{};
   ThemeResources resources{};
@@ -317,6 +325,50 @@ void update_battery(ClassicThemeState* state, int pct, bool charging) {
       state->top_battery_fill, battery_fill_color(pct), 0);
 }
 
+void format_count(char* text, size_t size, uint64_t value) {
+  if (value >= 1000000000ULL) snprintf(text, size, "%.2fB", value / 1e9);
+  else if (value >= 1000000ULL) snprintf(text, size, "%.1fM", value / 1e6);
+  else if (value >= 1000ULL) snprintf(text, size, "%.1fK", value / 1e3);
+  else snprintf(text, size, "%llu", (unsigned long long)value);
+}
+
+void format_cost(char* text, size_t size, uint64_t cents, bool valid, bool partial) {
+  if (!valid) snprintf(text, size, "--");
+  else if (cents >= 1000000ULL) snprintf(text, size, "$%.1fK%s", cents / 1e5, partial ? "+" : "");
+  else snprintf(text, size, "$%llu.%02u%s", (unsigned long long)(cents / 100), (unsigned)(cents % 100), partial ? "+" : "");
+}
+
+void update_details(ClassicThemeState* state, const DashboardViewModel& model) {
+  if (!state->tasks) return;
+  for (int w = 0; w < 2; ++w) {
+    const auto& b = model.breakdown[w];
+    char cost[32], summary[40];
+    format_cost(cost, sizeof(cost), b.cents[0] + b.cents[1] + b.cents[2], b.valid, b.partial);
+    snprintf(summary, sizeof(summary), "API est. %s", cost);
+    lv_label_set_text(state->summary_costs[w], summary);
+    if (model.detail_page) lv_obj_add_flag(state->panels[w], LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_clear_flag(state->panels[w], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_text_color(state->periods[w], w == (int)model.detail_week ? CODEX_BLUE : DIM, 0);
+  }
+  if (model.detail_page) lv_obj_clear_flag(state->detail, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_add_flag(state->detail, LV_OBJ_FLAG_HIDDEN);
+  lv_label_set_text(state->page_hint, model.detail_page ? "2/2  Swipe for dashboard" : "1/2  Swipe for token details");
+  const auto& b = model.breakdown[model.detail_week ? 1 : 0];
+  for (int i = 0; i < 4; ++i) {
+    char text[32];
+    uint64_t tokens = i < 3 ? b.tokens[i] : (model.detail_week ? model.last_7d_tokens : model.today_tokens);
+    uint64_t cents = i < 3 ? b.cents[i] : b.cents[0] + b.cents[1] + b.cents[2];
+    if (b.valid) format_count(text, sizeof(text), tokens);
+    else strlcpy(text, "--", sizeof(text));
+    lv_label_set_text(state->detail_tokens[i], text);
+    format_cost(text, sizeof(text), cents, b.valid, b.partial);
+    lv_label_set_text(state->detail_costs[i], text);
+  }
+  lv_label_set_text(state->detail_note, !b.valid ? "Waiting for token breakdown" :
+      b.unknown ? "Partial data / costs: see desktop" :
+      b.partial ? "+ Partial cost: some usage unpriced" : "Standard API estimate (USD)");
+}
+
 void tick_activity(ClassicThemeState* state, uint32_t now) {
   if (state->activity_visible_count <= 0) return;
   if (state->activity_anim_last_ms != 0 &&
@@ -376,6 +428,7 @@ bool classic_mount(
   lv_obj_align(state->top_battery, LV_ALIGN_TOP_RIGHT, -58, 16);
 
   lv_obj_t* panel_h5 = make_panel(state, 92);
+  state->panels[0] = panel_h5;
   state->h5_content = make_panel_content(panel_h5);
   lv_obj_t* label = make_label(
       state->h5_content, "5h left:", resources.ui_font, DIM);
@@ -415,6 +468,7 @@ bool classic_mount(
   lv_obj_add_flag(state->token_content, LV_OBJ_FLAG_HIDDEN);
 
   lv_obj_t* panel_d7 = make_panel(state, 270);
+  state->panels[1] = panel_d7;
   lv_obj_t* content_d7 = make_panel_content(panel_d7);
   state->d7_heading = make_label(
       content_d7, tasks ? "Weekly quota" : "7d left:", resources.ui_font, DIM);
@@ -427,6 +481,14 @@ bool classic_mount(
   lv_obj_align(state->d7_reset, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 
   if (tasks) {
+    // Retain the original header and dashboard, adding prices below the totals.
+    lv_obj_set_height(state->token_content, 126);
+    lv_obj_align(state->token_today_value, LV_ALIGN_TOP_LEFT, 0, 34);
+    lv_obj_align(state->token_7d_value, LV_ALIGN_TOP_LEFT, TOKEN_RIGHT_COLUMN_X, 34);
+    for (int w = 0; w < 2; ++w) {
+      state->summary_costs[w] = make_label(state->token_content, "API est. --", &lv_font_montserrat_16, DIM);
+      lv_obj_set_pos(state->summary_costs[w], w * TOKEN_RIGHT_COLUMN_X, 105);
+    }
     // Keep the original panels; reserve the lower right quarter for chat counts.
     lv_obj_set_height(content_d7, 126);
     lv_obj_set_style_text_font(state->d7_heading, &lv_font_montserrat_24, 0);
@@ -456,6 +518,42 @@ bool classic_mount(
     state->activity_dots[i] =
         make_activity_dot(state->root);
   }
+  if (tasks) {
+    state->detail = lv_obj_create(state->root);
+    strip_obj(state->detail);
+    lv_obj_set_pos(state->detail, 20, 76);
+    lv_obj_set_size(state->detail, 440, 350);
+    lv_obj_set_style_bg_color(state->detail, PANEL, 0);
+    lv_obj_set_style_bg_opa(state->detail, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(state->detail, 8, 0);
+    state->periods[0] = make_label(state->detail, "Today", &lv_font_montserrat_24, CODEX_BLUE);
+    state->periods[1] = make_label(state->detail, "7 days", &lv_font_montserrat_24, DIM);
+    lv_obj_align(state->periods[0], LV_ALIGN_TOP_MID, -CODEXMETER_SCREEN_W / 4, 14);
+    lv_obj_align(state->periods[1], LV_ALIGN_TOP_MID, CODEXMETER_SCREEN_W / 4, 14);
+    label = make_label(state->detail, "Tokens", &lv_font_montserrat_16, DIM);
+    lv_obj_set_pos(label, 220, 60);
+    label = make_label(state->detail, "API USD", &lv_font_montserrat_16, DIM);
+    lv_obj_set_pos(label, 336, 60);
+    const char* names[] = {"Input (new)", "Cached input", "Output", "Total"};
+    for (int i = 0; i < 4; ++i) {
+      int y = 92 + i * 52;
+      label = make_label(state->detail, names[i], &lv_font_montserrat_24, i == 3 ? TEXT : DIM);
+      lv_obj_set_pos(label, 18, y);
+      state->detail_tokens[i] = make_label(state->detail, "--", &lv_font_montserrat_24, TEXT);
+      lv_obj_set_pos(state->detail_tokens[i], 184, y);
+      lv_obj_set_width(state->detail_tokens[i], 110);
+      lv_obj_set_style_text_align(state->detail_tokens[i], LV_TEXT_ALIGN_RIGHT, 0);
+      state->detail_costs[i] = make_label(state->detail, "--", &lv_font_montserrat_24, TEXT);
+      lv_obj_set_pos(state->detail_costs[i], 300, y);
+      lv_obj_set_width(state->detail_costs[i], 124);
+      lv_obj_set_style_text_align(state->detail_costs[i], LV_TEXT_ALIGN_RIGHT, 0);
+    }
+    state->detail_note = make_label(state->detail, "Waiting for token breakdown", &lv_font_montserrat_16, DIM);
+    lv_obj_align(state->detail_note, LV_ALIGN_BOTTOM_MID, 0, -14);
+    lv_obj_add_flag(state->detail, LV_OBJ_FLAG_HIDDEN);
+    state->page_hint = make_label(state->root, "1/2  Swipe for token details", &lv_font_montserrat_16, DIM);
+    lv_obj_align(state->page_hint, LV_ALIGN_TOP_MID, 0, 430);
+  }
   return true;
 }
 
@@ -463,6 +561,7 @@ void classic_update(
     void* raw_state, const DashboardViewModel& model) {
   auto* state = static_cast<ClassicThemeState*>(raw_state);
   update_usage(state, model);
+  update_details(state, model);
   update_activity(state, model.running_count);
   if (state->tasks) {
     const int counts[] = {model.running_count, model.waiting_count, model.done_count};

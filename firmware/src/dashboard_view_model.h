@@ -13,6 +13,9 @@ enum class DashboardDataState : uint8_t {
 };
 
 struct DashboardViewModel {
+  TokenBreakdown breakdown[2]{};
+  bool detail_page = false;
+  bool detail_week = false;
   DashboardDataState data_state = DashboardDataState::Waiting;
   bool usage_valid = false;
   bool token_usage_mode = false;

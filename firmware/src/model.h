@@ -2,7 +2,16 @@
 
 #include <Arduino.h>
 
+struct TokenBreakdown {
+  bool valid = false;
+  uint64_t tokens[3]{};
+  uint64_t cents[3]{};
+  bool partial = false;
+  bool unknown = false;
+};
+
 struct UsageModel {
+  TokenBreakdown breakdown[2]{};
   bool valid = false;
   int h5_remaining = -1;
   long h5_reset = 0;

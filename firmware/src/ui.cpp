@@ -94,6 +94,8 @@ ThemeRotationPolicy rotation_policy;
 UsageModel app_usage;
 ActivityModel app_activity;
 DashboardViewModel dashboard_model;
+bool token_detail_page = false;
+bool token_detail_week = false;
 int app_battery_percent = -1;
 bool app_charging = false;
 
@@ -293,6 +295,8 @@ void refresh_dashboard_model(uint32_t now_ms) {
       app_usage, app_activity, app_battery_percent,
       app_charging, now_ms);
   dashboard_last_refresh_ms = now_ms;
+  dashboard_model.detail_page = token_detail_page;
+  dashboard_model.detail_week = token_detail_week;
   theme_runtime.update(dashboard_model);
 }
 
@@ -957,6 +961,18 @@ void ui_middle_short_press() {
   } else {
     open_settings();
   }
+}
+
+void ui_touch_gesture(int dx, int dy, int x, int y, bool tap) {
+  if (!display_active || waiting_for_companion || settings_active || ui_alert_visible()) return;
+  if (strcmp(theme_runtime.current_id(), "classic_tasks") != 0) return;
+  if (!tap && abs(dx) >= 60 && abs(dx) > abs(dy) * 2) {
+    token_detail_page = !token_detail_page;
+  } else if (tap && token_detail_page && y >= 70 && y <= 140) {
+    token_detail_week = x >= CODEXMETER_SCREEN_W / 2;
+  } else return;
+  refresh_dashboard_model(millis());
+  device_logf("INFO", "token page=%d week=%d", token_detail_page, token_detail_week);
 }
 
 void ui_settings_move(int direction) {

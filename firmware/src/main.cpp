@@ -19,6 +19,7 @@
 #include "power.h"
 #include "theme_registry.h"
 #include "ui.h"
+#include "touch_input.h"
 
 #ifdef BOARD_HAS_PSRAM
 #define LV_BUF_CAPS MALLOC_CAP_SPIRAM
@@ -61,6 +62,8 @@ static char recent_alert_ids[8][sizeof(alert.id)];
 static uint8_t recent_alert_index = 0;
 static uint32_t last_usage_ms = 0;
 static uint32_t last_host_payload_ms = 0;
+// Bounded serial-only UI validation; never persisted across reboot.
+static uint32_t serial_ui_test_ms = 0;
 static bool screen_on = true;
 static bool watchdog_enabled = false;
 static int brightness_percent = CODEXMETER_BRIGHTNESS_DEFAULT;
@@ -583,6 +586,20 @@ static void handle_serial() {
         last_usage_ms = millis();
         ui_update_usage(usage);
         device_logf("INFO", "serial demo_token_usage");
+      } else if (strcmp(buf, "test_ui_on") == 0) {
+        serial_ui_test_ms = millis();
+        Serial.println("TEST_UI on");
+      } else if (strcmp(buf, "test_ui_off") == 0) {
+        serial_ui_test_ms = 0;
+        Serial.println("TEST_UI off");
+      } else if (strcmp(buf, "test_swipe") == 0) {
+        ui_touch_gesture(-120, 0, 180, 200, false);
+      } else if (strcmp(buf, "touch_status") == 0) {
+        touch_input_diagnostics();
+      } else if (strcmp(buf, "test_tap_today") == 0) {
+        ui_touch_gesture(0, 0, 110, 100, true);
+      } else if (strcmp(buf, "test_tap_week") == 0) {
+        ui_touch_gesture(0, 0, 350, 100, true);
       } else if (strcmp(buf, "demo_alert") == 0) {
         alert_apply_demo(&alert);
         ui_show_alert(alert);
@@ -818,6 +835,7 @@ static void handle_button() {
 }
 
 static void handle_ble_screen_policy() {
+  if (serial_ui_test_ms && millis() - serial_ui_test_ms < 120000) return;
   // A BLE link alone is not proof that the companion is supplying data.
   // Keep the boot screen until the first valid data payload, and return to it
   // on disconnection or a silent/stalled host. Never override manual power-off.
@@ -851,6 +869,7 @@ void setup() {
   UiSystemHooks ui_hooks{};
   ui_hooks.apply_brightness = settings_apply_brightness;
   ui_init(ui_hooks);
+  touch_input_init();
   ui_set_display_active(true);
   refresh_battery_ui(true);
   ble_service_init();
@@ -887,6 +906,7 @@ void loop() {
   if (power_take_state_changed()) refresh_battery_ui(false);
   ble_service_tick();
   handle_button();
+  touch_input_tick(screen_on);
   handle_serial();
   if (screen_on) handle_orientation();
 

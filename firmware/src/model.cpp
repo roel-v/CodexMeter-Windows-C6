@@ -25,6 +25,22 @@ PayloadKind parse_payload(
   const char* kind = doc["k"] | "";
   if (strcmp(kind, "usage") == 0) {
     usage->valid = true;
+    for (int w = 0; w < 2; ++w) {
+      usage->breakdown[w] = TokenBreakdown{};
+      JsonArray values = doc[w == 0 ? "b0" : "b7"].as<JsonArray>();
+      bool valid = values.size() == 8;
+      for (int i = 0; valid && i < 8; ++i) valid = values[i].is<uint64_t>();
+      if (valid) {
+        auto& detail = usage->breakdown[w];
+        detail.valid = true;
+        for (int i = 0; i < 3; ++i) {
+          detail.tokens[i] = values[i].as<uint64_t>();
+          detail.cents[i] = values[i + 3].as<uint64_t>();
+        }
+        detail.partial = values[6].as<int>() != 0;
+        detail.unknown = values[7].as<int>() != 0;
+      }
+    }
     usage->h5_remaining = doc["h5"] | -1;
     usage->h5_reset = doc["h5r"] | 0L;
     usage->d7_remaining = doc["d7"] | -1;

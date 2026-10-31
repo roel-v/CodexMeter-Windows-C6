@@ -62,10 +62,13 @@ void format_d7_reset(
     strlcpy(output, "Reset in --", size);
     return;
   }
-  long days =
-      (seconds + 24L * 60L * 60L - 1L) /
-      (24L * 60L * 60L);
-  snprintf(output, size, "Reset in %ldd", days);
+  if (seconds >= 86400L) {
+    long hours = seconds / 3600L;
+    snprintf(output, size, "Reset %ldd %ldh", hours / 24L, hours % 24L);
+  } else {
+    long minutes = seconds / 60L;
+    snprintf(output, size, "Reset %ldh %ldm", minutes / 60L, minutes % 60L);
+  }
 }
 
 void format_compact_tokens(
@@ -129,6 +132,8 @@ DashboardViewModel build_dashboard_view_model(
   DashboardViewModel model;
   model.data_state = data_state_for(usage);
   model.usage_valid = usage.valid;
+  model.breakdown[0] = usage.breakdown[0];
+  model.breakdown[1] = usage.breakdown[1];
   model.h5_remaining = normalized_percent(usage.h5_remaining);
   model.d7_remaining = normalized_percent(usage.d7_remaining);
   model.token_usage_mode =
