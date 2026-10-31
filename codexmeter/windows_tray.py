@@ -51,6 +51,7 @@ class WindowsTray:
         self.icon = None
         self.app = None
         self.last_poll_at = None
+        self.pricing_dialog = None
 
     def bind_shutdown(self, callback: Callable[[], None]):
         self.shutdown = callback
@@ -62,6 +63,23 @@ class WindowsTray:
 
     def open_control_panel(self):
         self.commands.put(("open", None))
+
+    def open_pricing_notice(self):
+        self.commands.put(("pricing_notice", None))
+
+    def _show_pricing_notice(self):
+        if self.quit_requested:
+            return
+        if self.pricing_dialog is not None and self.pricing_dialog.winfo_exists():
+            self.pricing_dialog.deiconify()
+            self.pricing_dialog.lift()
+            self.pricing_dialog.focus_force()
+            return
+        from .windows_app import show_pricing_notice
+        def review():
+            self._show_panel()
+            self.app.open_pricing()
+        self.pricing_dialog = show_pricing_notice(self.root, review)
 
     def quit(self):
         logging.getLogger("codexmeter.lifecycle").info("SHUTDOWN_REQUEST source=tray_quit")
@@ -106,6 +124,10 @@ class WindowsTray:
                 break
             if command == "open":
                 self._show_panel()
+            elif command == "pricing_warning":
+                self.icon.notify(value, "CodexMeter pricing needs attention")
+            elif command == "pricing_notice":
+                self._show_pricing_notice()
             elif command == "quit":
                 self._request_quit()
             elif command == "status" and not self.quit_requested:
@@ -123,7 +145,7 @@ class WindowsTray:
         from tkinter import ttk
         # Select the native backend explicitly so a user environment variable
         # cannot select an unsupported Linux backend in the Windows bundle.
-        from pystray._win32 import Icon
+        from .windows_notification import NotificationIcon
         from pystray import Menu, MenuItem
 
         self.root = tk.Tk()
@@ -133,12 +155,13 @@ class WindowsTray:
         self.root.protocol("WM_DELETE_WINDOW", self._hide_panel)
         ttk.Style().theme_use("vista")
         self.images = {state: make_icon(state) for state in ("green", "amber", "gray")}
-        self.icon = Icon("CodexMeter", self.images["gray"], "CodexMeter — starting bridge", Menu(
+        self.icon = NotificationIcon("CodexMeter", self.images["gray"], "CodexMeter — starting bridge", Menu(
             MenuItem("Open control panel", lambda: self.open_control_panel(), default=True),
             MenuItem(lambda item: self.snapshot["text"], None, enabled=False),
             Menu.SEPARATOR,
+            MenuItem("Pricing source status…", lambda: self.open_pricing_notice()),
             MenuItem("Quit CodexMeter", lambda: self.quit()),
-        ))
+        ), on_notification_click=self.open_pricing_notice)
 
         def worker():
             try:

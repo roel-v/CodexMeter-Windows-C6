@@ -27,6 +27,14 @@ def self_test(output: Path) -> int:
         root.withdraw()
         app = MeterApp(root)
         root.update()
+        from .pricing import PricingStore
+        assert PricingStore().revisions()[-1]["prices"], "Bundled pricing seed missing"
+        app.open_pricing()
+        root.update()
+        for child_window in root.winfo_children():
+            if isinstance(child_window, tk.Toplevel):
+                child_window.destroy()
+        result["pricing_panel"] = True
         command = app_command("cli", "devices", "list")
         child = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
                                timeout=60, creationflags=subprocess.CREATE_NO_WINDOW)

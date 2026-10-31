@@ -61,6 +61,21 @@ def check_tray():
             assert tray.snapshot["panel_open"] and tray.app is original_panel[0]
             result["menu_reuses_panel"] = True
             tray.publish_status({"configured_count": 1, "devices": [{"connected": False}]})
+        step(check, notification_click)
+
+    def notification_click():
+        def check():
+            from .windows_notification import BALLOON_CLICK
+            tray._hide_panel()
+            win32.PostMessage(tray.icon._hwnd, win32.WM_NOTIFY, 0, BALLOON_CLICK)
+        step(check, notification_opened)
+
+    def notification_opened():
+        def check():
+            assert tray.pricing_dialog is not None and tray.pricing_dialog.winfo_exists()
+            assert not tray.snapshot["panel_open"]
+            result["native_notification_click_opens_dialog"] = True
+            tray.pricing_dialog.destroy()
         step(check, disconnected)
 
     def disconnected():
