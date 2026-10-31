@@ -20,6 +20,9 @@ class _SessionFileState:
     has_history_base: bool = False
     uses_usage_records: bool = False
     usage_records: dict[str, tuple[dt.date, int]] = field(default_factory=dict)
+    turn_models: dict[str, str] = field(default_factory=dict)
+    current_model: str | None = None
+    detailed_records: dict[str, dict] = field(default_factory=dict)
 
 
 class LocalTokenUsageReader:
@@ -132,6 +135,8 @@ class LocalTokenUsageReader:
                         break
                     state.offset = handle.tell()
                     self._capture_session_meta(line, state)
+                    if '"turn_context"' in line:
+                        self._capture_turn(line, state)
                     if '"token_usage_record"' in line:
                         self._apply_usage_record(line, state, first_date, target_date, timezone)
                     if '"token_count"' not in line:
@@ -139,6 +144,63 @@ class LocalTokenUsageReader:
                     self._apply_token_event(line, state, first_date, target_date, timezone)
         except OSError:
             return
+
+    @staticmethod
+    def _capture_turn(line, state):
+        try:
+            row = json.loads(line)
+            payload = row.get("payload", {})
+            if row.get("type") == "turn_context":
+                model = payload.get("model")
+                state.current_model = model if isinstance(model, str) else None
+                if isinstance(payload.get("turn_id"), str) and state.current_model:
+                    state.turn_models[payload["turn_id"]] = state.current_model
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+    def read_breakdown(self, daily, pricing):
+        """Reuse this scan's per-response records; never reattribute replayed history."""
+        from decimal import Decimal
+        records = {}
+        for state in self._states.values():
+            for key, record in state.detailed_records.items():
+                if key not in records or (not records[key].get("model") and record.get("model")):
+                    records[key] = record
+        revisions = pricing.revisions()
+        def summarize(days):
+            result = {"tokens": [0, 0, 0], "cost_micro_usd": [0, 0, 0],
+                      "unpriced_tokens": 0, "unknown_tokens": 0, "cache_write_tokens": 0,
+                      "total_tokens": sum(daily[d] for d in days), "models": {}, "basis": "Standard API rates"}
+            costs = [Decimal(0), Decimal(0), Decimal(0)]
+            accounted = 0
+            for record in records.values():
+                if record["day"] not in days:
+                    continue
+                accounted += record["total"]
+                model = record.get("model") or "Unknown model"
+                entry = result["models"].setdefault(model, {"tokens": 0, "cost_usd": 0, "unpriced_tokens": 0, "reasons": []})
+                entry["tokens"] += record["total"]
+                if record.get("tokens") is None:
+                    result["unknown_tokens"] += record["total"]
+                    estimate, reason = None, "Token breakdown unavailable"
+                else:
+                    result["tokens"] = [a + b for a, b in zip(result["tokens"], record["tokens"])]
+                    result["cache_write_tokens"] += record.get("cache_write", 0)
+                    estimate, reason = pricing.cost(record, revisions)
+                if estimate is None:
+                    result["unpriced_tokens"] += record["total"]
+                    entry["unpriced_tokens"] += record["total"]
+                    if reason not in entry["reasons"]:
+                        entry["reasons"].append(reason)
+                else:
+                    costs = [a + b for a, b in zip(costs, estimate)]
+                    entry["cost_usd"] += float(sum(estimate) / 1_000_000)
+            legacy = max(0, result["total_tokens"] - accounted)
+            result["unknown_tokens"] += legacy
+            result["unpriced_tokens"] += legacy
+            result["cost_micro_usd"] = [int(v.to_integral_value()) for v in costs]
+            return result
+        return {"today": summarize({max(daily)}), "week": summarize(set(daily))}
 
     @staticmethod
     def _capture_session_meta(line: str, state: _SessionFileState) -> None:
@@ -213,6 +275,21 @@ class LocalTokenUsageReader:
         if first_date <= event_date <= target_date:
             state.usage_records[response_id] = (event_date, total)
             state.observed_dates.add(event_date)
+            counts = [usage.get(k) for k in ("input_tokens", "cached_input_tokens", "output_tokens")]
+            valid = all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in counts)
+            tokens = None
+            if valid and counts[1] <= counts[0] and counts[0] + counts[2] == total:
+                tokens = [counts[0] - counts[1], counts[1], counts[2]]
+            turn_id = payload.get("turn_id")
+            # A known turn id must not inherit a different turn's selected model.
+            model = state.turn_models.get(turn_id) if turn_id else state.current_model
+            cache_write = usage.get("cache_write_input_tokens", 0)
+            if not isinstance(cache_write, int) or isinstance(cache_write, bool) or cache_write < 0:
+                tokens = None
+                cache_write = 0
+            state.detailed_records[response_id] = {
+                "time": event_time, "day": event_date, "total": total, "tokens": tokens,
+                "model": model, "input": counts[0] if valid else 0, "cache_write": cache_write}
 
     @staticmethod
     def _apply_token_event(

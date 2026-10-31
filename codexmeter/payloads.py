@@ -43,6 +43,13 @@ def build_usage_payload(snapshot: UsageSnapshot) -> Payload:
         "st": snapshot.status,
         "t": snapshot.generated_at,
     }
+    if snapshot.token_details:
+        for key, window in (("b0", "today"), ("b7", "week")):
+            detail = snapshot.token_details[window]
+            # Nonoverlapping token counts, costs in USD cents, then coverage flags.
+            data[key] = [*detail["tokens"],
+                         *[(v + 5000) // 10000 for v in detail["cost_micro_usd"]],
+                         int(detail["unpriced_tokens"] > 0), int(detail["unknown_tokens"] > 0)]
     return Payload("usage", data)
 
 

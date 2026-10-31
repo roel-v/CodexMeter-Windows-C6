@@ -57,7 +57,16 @@ class CodexUsageProvider:
         today_tokens = daily[now.date()]
         last_7d_tokens = sum(daily.values())
         self._log_local_usage_change(daily)
-        return replace(snapshot, today_tokens=today_tokens, last_7d_tokens=last_7d_tokens)
+        details = None
+        if hasattr(self.local_usage_reader, "read_breakdown"):
+            try:
+                from .pricing import PricingStore, PRICING_DIR
+                from .persistence import atomic_write_json
+                details = await asyncio.to_thread(self.local_usage_reader.read_breakdown, daily, PricingStore())
+                await asyncio.to_thread(atomic_write_json, PRICING_DIR / "usage-report.json", details)
+            except Exception:
+                LOGGER.exception("Token pricing unavailable; token totals retained")
+        return replace(snapshot, today_tokens=today_tokens, last_7d_tokens=last_7d_tokens, token_details=details)
 
     def _log_local_usage_change(self, daily: dict[dt.date, int]) -> None:
         signature = tuple(sorted(daily.items()))

@@ -46,6 +46,7 @@ class UsageSnapshot:
     generated_at: int
     today_tokens: int | None = None
     last_7d_tokens: int | None = None
+    token_details: dict | None = None
 
 
 @dataclass(frozen=True)

@@ -30,6 +30,7 @@ from .multi_ble import DeviceManager
 from .payloads import Payload, build_activity_payload, build_usage_payload
 from .persistence import atomic_write_json
 from .provider import CodexUsageProvider
+from .pricing import pricing_monitor_loop
 from .queueing import put_latest
 from .screen_policy import screen_policy_loop
 from .settings import (
@@ -237,6 +238,7 @@ def usage_snapshot_to_cache(snapshot: UsageSnapshot) -> dict[str, object]:
         "generated_at": snapshot.generated_at,
         "today_tokens": snapshot.today_tokens,
         "last_7d_tokens": snapshot.last_7d_tokens,
+        "token_details": snapshot.token_details,
     }
 
 
@@ -257,6 +259,7 @@ def usage_snapshot_from_cache(data: dict[str, object]) -> UsageSnapshot | None:
         generated_at=generated_at,
         today_tokens=_cache_int(data.get("today_tokens")),
         last_7d_tokens=_cache_int(data.get("last_7d_tokens")),
+        token_details=data.get("token_details") if isinstance(data.get("token_details"), dict) else None,
     )
 
 
@@ -390,6 +393,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             **({"tray_status": tray_status_loop()} if desktop is not None else {}),
             "events": event_server.run(stop_event),
             "quota": quota_loop(provider, sink, stop_event, args.poll_interval),
+            "pricing": pricing_monitor_loop(stop_event, desktop),
             "screen_policy": screen_policy_loop(
                 sink,
                 None,
