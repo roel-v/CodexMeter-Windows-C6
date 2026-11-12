@@ -12,8 +12,7 @@ WINDOW_7D_MINS = 7 * 24 * 60
 TOKEN_ACTIVITY_LOCAL_MIN_DIFF = 1_000_000
 TOKEN_ACTIVITY_LOCAL_REL_DIFF = 0.25
 USAGE_RECOVERY_CONFIRMATIONS = 2
-USAGE_EARLY_RESET_CONFIRMATIONS = 3
-USAGE_EARLY_RESET_CONFIRMATION_SEC = 10 * 60
+USAGE_EARLY_RESET_CONFIRMATIONS = 2
 USAGE_REMAINING_JUMP_THRESHOLD = 25
 USAGE_RESET_GRACE_SEC = 60
 USAGE_SAME_RESET_TOLERANCE_SEC = 120
@@ -74,7 +73,6 @@ class UsageSnapshotStabilizer:
         self.trusted = trusted
         self.pending: UsageSnapshot | None = None
         self.pending_reason: str | None = None
-        self.pending_started_at: int | None = None
         self.pending_count = 0
 
     def stabilize(self, snapshot: UsageSnapshot) -> UsageSnapshotDecision:
@@ -96,16 +94,9 @@ class UsageSnapshotStabilizer:
         else:
             self.pending = snapshot
             self.pending_reason = reason
-            self.pending_started_at = snapshot.generated_at
             self.pending_count = 1
 
-        pending_started_at = (
-            self.pending_started_at
-            if self.pending_started_at is not None
-            else snapshot.generated_at
-        )
-        pending_elapsed = snapshot.generated_at - pending_started_at
-        if self._can_confirm_transient(reason, pending_elapsed):
+        if self._can_confirm_transient(reason):
             self._accept(snapshot)
             return UsageSnapshotDecision(
                 snapshot,
@@ -121,7 +112,6 @@ class UsageSnapshotStabilizer:
         self.trusted = snapshot
         self.pending = None
         self.pending_reason = None
-        self.pending_started_at = None
         self.pending_count = 0
 
     def _transient_reason(
@@ -152,14 +142,11 @@ class UsageSnapshotStabilizer:
         )
         return d7_reason or h5_reason
 
-    def _can_confirm_transient(self, reason: str, pending_elapsed: int) -> bool:
+    def _can_confirm_transient(self, reason: str) -> bool:
         if reason.endswith("_remaining_recovery"):
             return self.pending_count >= self.confirmations
         if reason.endswith("_early_reset_jump"):
-            return (
-                self.pending_count >= USAGE_EARLY_RESET_CONFIRMATIONS
-                and pending_elapsed >= USAGE_EARLY_RESET_CONFIRMATION_SEC
-            )
+            return self.pending_count >= USAGE_EARLY_RESET_CONFIRMATIONS
         return False
 
 

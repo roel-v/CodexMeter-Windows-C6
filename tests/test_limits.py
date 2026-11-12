@@ -1,7 +1,6 @@
 import datetime as dt
 
 from codexmeter.limits import (
-    USAGE_EARLY_RESET_CONFIRMATION_SEC,
     UsageSnapshot,
     UsageSnapshotStabilizer,
     WINDOW_5H_MINS,
@@ -258,7 +257,7 @@ def test_suspicious_initial_snapshot_detects_empty_d7_window():
     assert is_suspicious_initial_snapshot(normal) is False
 
 
-def test_usage_stabilizer_does_not_confirm_early_reset_jump_before_cooldown():
+def test_usage_stabilizer_confirms_early_reset_on_second_matching_reading():
     stabilizer = UsageSnapshotStabilizer()
     trusted = usage_snapshot(
         h5=91,
@@ -280,12 +279,12 @@ def test_usage_stabilizer_does_not_confirm_early_reset_jump_before_cooldown():
     second = stabilizer.stabilize(transient)
 
     assert first.accepted is False
-    assert second.accepted is False
-    assert second.reason == "d7_early_reset_jump"
-    assert second.snapshot.d7_remaining_percent == 36
+    assert second.accepted is True
+    assert second.reason == "confirmed:d7_early_reset_jump"
+    assert second.snapshot.d7_remaining_percent == 100
 
 
-def test_usage_stabilizer_confirms_persistent_d7_early_reset_after_cooldown():
+def test_usage_stabilizer_requires_consecutive_early_reset_readings():
     stabilizer = UsageSnapshotStabilizer()
     trusted = usage_snapshot(
         h5=91,
@@ -306,10 +305,9 @@ def test_usage_stabilizer_confirms_persistent_d7_early_reset_after_cooldown():
 
     stabilizer.stabilize(trusted)
     first = stabilizer.stabilize(early_reset(1783483132))
-    second = stabilizer.stabilize(early_reset(1783483432))
-    confirmed = stabilizer.stabilize(
-        early_reset(1783483132 + USAGE_EARLY_RESET_CONFIRMATION_SEC)
-    )
+    assert stabilizer.stabilize(trusted).accepted is True
+    second = stabilizer.stabilize(early_reset(1783483252))
+    confirmed = stabilizer.stabilize(early_reset(1783483312))
 
     assert first.accepted is False
     assert second.accepted is False
