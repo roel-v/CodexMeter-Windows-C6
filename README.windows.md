@@ -346,3 +346,28 @@ checks the waiting screen beyond the old timeout; omit `--waiting` after opening
 the companion to verify the normal theme returns. Each check saves a screenshot
 and health records. Firmware bundles and evidence are under
 `dist/c6/waiting-screen-20261024/`.
+
+
+## Desktop and firmware compatibility
+
+Use the desktop executable and **ESP32-C6** factory image from the same dated
+release for the tested combination. The November 12, 2026 bundle uses unchanged
+firmware source from November 1: those releases' clients and firmware can be mixed.
+Existing November 1 displays do not need reflashing for the November 12 desktop fixes.
+
+The BLE messages use JSON with `v: 1`, but the firmware currently does **not** check
+that version field or negotiate capabilities. A connection/ACK confirms receipt,
+not full feature compatibility. There is no automatic mismatch warning.
+
+- A newer desktop with older firmware can still show fields that firmware knows;
+  optional token breakdown/cost fields are ignored by firmware that predates them.
+- Newer firmware with an older desktop keeps basic quota/token fields working when
+  present. Missing breakdown data is marked unavailable, and missing waiting/done
+  fields do not become valid chat counts.
+- Unrelated upstream versions or future incompatible schemas are not guaranteed:
+  unsupported messages may be rejected, while changed meanings could be misread.
+  Use a matched release when diagnosing missing or incorrect information.
+
+These compatibility statements concern the data protocol. A firmware image must
+also match the board: the C6 image is not for the ESP32-S3. Never bypass esptool's
+chip-family checks.

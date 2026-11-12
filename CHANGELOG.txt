@@ -4,6 +4,30 @@ Entries are grouped by release date, newest first. Bundle dates identify the
 combined Windows application and C6 firmware release; application file versions
 are recorded separately.
 
+2026-11-12 — windows-c6-2026.11.12 (Windows 3.12.2.7)
+Changes since the 2026-11-01 release. Includes work completed November 1–2.
+- Advance the release-check baseline to this bundle.
+- Rebuild the accompanying C6 firmware from unchanged November 1 firmware source.
+  The two bundles use the same wire format; either client works with either firmware.
+- Stream chat-state messages in bounded chunks and skip transcript values before
+  decoding status metadata. Large snapshots no longer cause task-count reconnect
+  loops. Bound retained metadata separately and preserve patch revisions.
+- Detach background companion launches from the launching console and Windows job,
+  so closing the host does not own the companion's lifetime. No restart watchdog.
+- Record privacy-safe chat observer failure locations and rate-limit repeated logs.
+
+- Accept early quota resets after two consecutive consistent readings, removing
+  the ten-minute confirmation delay. Conflicting readings restart confirmation.
+- Add a persistent Automatically check GitHub releases checkbox. When disabled,
+  background release requests and notifications stop; explicit manual checks
+  remain available. Explain that OpenAI pricing checks are a separate feature.
+- Check this fork's latest stable GitHub release daily while running and notify
+  once per newer dated release. Add manual checks through Updates in the tray
+  menu and desktop panel. No assets are downloaded or installed automatically.
+- Show pricing and release status together when a tray notification is clicked,
+  with separate details buttons so older notifications remain understandable.
+- Retry failed automatic checks after an hour without interrupting the bridge.
+
 2026-11-01 — windows-c6-2026.11.01 (Windows 3.12.2.1)
 Changes since the first release on 2026-10-24:
 

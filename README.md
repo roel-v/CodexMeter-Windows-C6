@@ -156,3 +156,12 @@ Thanks to [tomatoeggs/CodexMeter](https://github.com/tomatoeggs/CodexMeter) for 
 original application, firmware and themes. The original copyright and
 [MIT license](LICENSE) are retained. See [NOTICE.md](NOTICE.md) for third-party
 attribution.
+
+
+### Mixing desktop and firmware releases
+
+The November 12, 2026 release contains desktop fixes and an accompanying rebuild
+of the unchanged November 1 C6 firmware. Those two bundles are protocol-compatible;
+existing November 1 firmware does not need reflashing for these fixes. Other mixes
+can lose newer features, and there is no automatic compatibility warning. See
+[the compatibility notes](README.windows.md#desktop-and-firmware-compatibility).
