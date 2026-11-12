@@ -31,6 +31,7 @@ from .payloads import Payload, build_activity_payload, build_usage_payload
 from .persistence import atomic_write_json
 from .provider import CodexUsageProvider
 from .pricing import pricing_monitor_loop
+from .updates import update_monitor_loop
 from .queueing import put_latest
 from .screen_policy import screen_policy_loop
 from .settings import (
@@ -394,6 +395,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             "events": event_server.run(stop_event),
             "quota": quota_loop(provider, sink, stop_event, args.poll_interval),
             "pricing": pricing_monitor_loop(stop_event, desktop),
+            "updates": update_monitor_loop(stop_event, desktop),
             "screen_policy": screen_policy_loop(
                 sink,
                 None,

@@ -72,9 +72,24 @@ def check_tray():
 
     def notification_opened():
         def check():
-            assert tray.pricing_dialog is not None and tray.pricing_dialog.winfo_exists()
+            assert tray.notification_dialog is not None and tray.notification_dialog.winfo_exists()
             assert not tray.snapshot["panel_open"]
             result["native_notification_click_opens_dialog"] = True
+            tray.notification_dialog.destroy()
+            tray.open_updates()
+        step(check, updates_opened)
+
+    def updates_opened():
+        def check():
+            assert tray.update_dialog is not None and tray.update_dialog.winfo_exists()
+            result["updates_dialog"] = True
+            tray.update_dialog.destroy()
+            tray.open_pricing_notice()
+        step(check, pricing_opened)
+
+    def pricing_opened():
+        def check():
+            assert tray.pricing_dialog is not None and tray.pricing_dialog.winfo_exists()
             tray.pricing_dialog.destroy()
         step(check, disconnected)
 

@@ -52,6 +52,8 @@ class WindowsTray:
         self.app = None
         self.last_poll_at = None
         self.pricing_dialog = None
+        self.update_dialog = None
+        self.notification_dialog = None
 
     def bind_shutdown(self, callback: Callable[[], None]):
         self.shutdown = callback
@@ -66,6 +68,26 @@ class WindowsTray:
 
     def open_pricing_notice(self):
         self.commands.put(("pricing_notice", None))
+
+    def open_updates(self):
+        self.commands.put(("updates", None))
+
+    def open_notifications(self):
+        self.commands.put(("notifications", None))
+
+    def _show_updates(self):
+        from .update_dialog import show_updates
+        if self.update_dialog is not None and self.update_dialog.winfo_exists():
+            self.update_dialog.lift()
+            self.update_dialog.focus_force()
+        else:
+            self.update_dialog = show_updates(self.root)
+
+    def _show_notifications(self):
+        from .update_dialog import show_notifications
+        if self.notification_dialog is not None and self.notification_dialog.winfo_exists():
+            self.notification_dialog.destroy()
+        self.notification_dialog = show_notifications(self.root, self.open_pricing_notice, self.open_updates)
 
     def _show_pricing_notice(self):
         if self.quit_requested:
@@ -128,6 +150,14 @@ class WindowsTray:
                 self.icon.notify(value, "CodexMeter pricing needs attention")
             elif command == "pricing_notice":
                 self._show_pricing_notice()
+            elif command == "update_available":
+                from .updates import UpdateStore
+                if UpdateStore().automatic_enabled():
+                    self.icon.notify(value + " Click for details; nothing is installed automatically.", "CodexMeter update available")
+            elif command == "updates" and not self.quit_requested:
+                self._show_updates()
+            elif command == "notifications" and not self.quit_requested:
+                self._show_notifications()
             elif command == "quit":
                 self._request_quit()
             elif command == "status" and not self.quit_requested:
@@ -160,8 +190,9 @@ class WindowsTray:
             MenuItem(lambda item: self.snapshot["text"], None, enabled=False),
             Menu.SEPARATOR,
             MenuItem("Pricing source status…", lambda: self.open_pricing_notice()),
+            MenuItem("Updates…", lambda: self.open_updates()),
             MenuItem("Quit CodexMeter", lambda: self.quit()),
-        ), on_notification_click=self.open_pricing_notice)
+        ), on_notification_click=self.open_notifications)
 
         def worker():
             try:

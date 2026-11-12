@@ -5,6 +5,26 @@ This local port adds a Windows control panel and background Bluetooth bridge to
 memory-conscious firmware target for **ESP32-C6-Touch-AMOLED-2.16(-EN)**.
 The original firmware target is for the **S3**, not the C6.
 
+## Release notifications
+
+While running, the companion checks this fork's latest stable GitHub release
+at most once daily and notifies once per newer dated bundle. Open **Updates**
+from the tray menu or control panel for status, **Check now**, and a link to the
+release page. Nothing is downloaded, installed or flashed automatically.
+Uncheck **Automatically check GitHub releases** in that dialog to disable
+background release requests and notifications. The preference survives restarts.
+**Check now** still makes a request when explicitly clicked; it does not re-enable
+automatic checks. A request already in progress may finish, but disabling checks
+suppresses its notification. OpenAI pricing-page checks are separate and remain
+enabled. The preference is stored locally in `.codexmeter/updates.preferences.json`.
+Failures are shown in the Updates dialog and retried after an hour; they do not
+interrupt the display bridge. Check state is local in `.codexmeter/updates.json`.
+No GitHub login or token is needed. Checks send no usage or chat data.
+
+Release maintainers must advance `CURRENT_RELEASE` in `codexmeter/updates.py`
+when creating each new bundle. Supported tags are `windows-c6-YYYY.MM.DD` with
+an optional numeric `.N` suffix for another release on the same date.
+
 ## Requirements
 
 - Windows 10/11 with Bluetooth LE enabled.

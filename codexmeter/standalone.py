@@ -35,6 +35,22 @@ def self_test(output: Path) -> int:
             if isinstance(child_window, tk.Toplevel):
                 child_window.destroy()
         result["pricing_panel"] = True
+        import tempfile
+        from .update_dialog import show_updates
+        from .updates import UpdateStore
+        with tempfile.TemporaryDirectory(prefix="codexmeter-preference-check-") as scratch:
+            store = UpdateStore(Path(scratch) / "updates.json")
+            dialog = show_updates(root, store)
+            root.update()
+            checkbox = next(w for frame in dialog.winfo_children()
+                            for w in frame.winfo_children()
+                            if str(w).endswith(".automatic_updates"))
+            checkbox.invoke()
+            assert not UpdateStore(store.path).automatic_enabled()
+            checkbox.invoke()
+            assert UpdateStore(store.path).automatic_enabled()
+            dialog.destroy()
+        result["update_preference_checkbox"] = True
         command = app_command("cli", "devices", "list")
         child = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
                                timeout=60, creationflags=subprocess.CREATE_NO_WINDOW)

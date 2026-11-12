@@ -60,6 +60,8 @@ class MeterApp:
             ttk.Button(controls, text=label, command=lambda a=args: self.command(*a)).pack(side="left", padx=(0, 5))
         ttk.Button(controls, text="Open log", command=self.open_log).pack(side="left")
         ttk.Button(controls, text="Tokens / pricing", command=self.open_pricing).pack(side="left", padx=5)
+        from .update_dialog import show_updates
+        ttk.Button(controls, text="Updates", command=lambda: show_updates(self.root)).pack(side="left", padx=5)
         self.pricing_status = tk.StringVar()
         ttk.Label(frame, textvariable=self.pricing_status, wraplength=720, foreground="#9b5800").pack(anchor="w")
         self.pricing_poll_count = 0
