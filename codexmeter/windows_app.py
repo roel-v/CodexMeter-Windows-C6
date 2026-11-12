@@ -118,11 +118,8 @@ class MeterApp:
                     return "Bridge is already running."
             except (OSError, ValueError, TimeoutError):
                 pass
-            subprocess.Popen(
-                app_command("daemon", "--codex-bin", requested_executable),
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-            )
+            from .launch import launch_background
+            launch_background(app_command("daemon", "--codex-bin", requested_executable))
             import time
             for _ in range(300):
                 time.sleep(0.1)

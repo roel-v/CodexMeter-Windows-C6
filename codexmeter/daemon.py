@@ -471,7 +471,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = parse_args(sys.argv[1:] if argv is None else argv)
+    argv = list(sys.argv[1:] if argv is None else argv)
+    from .launch import detach_background_daemon
+    if detach_background_daemon(argv):
+        return 0
+    args = parse_args(argv)
     configure_logging(args.log_level, foreground=args.foreground)
     try:
         with DaemonLock():
