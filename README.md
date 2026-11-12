@@ -160,8 +160,9 @@ attribution.
 
 ### Mixing desktop and firmware releases
 
-The November 12, 2026 release contains desktop fixes and an accompanying rebuild
-of the unchanged November 1 C6 firmware. Those two bundles are protocol-compatible;
-existing November 1 firmware does not need reflashing for these fixes. Other mixes
-can lose newer features, and there is no automatic compatibility warning. See
+The November 12, 2026 follow-up bundle (`windows-c6-2026.11.12.1`) includes
+upstream token-rounding and theme-layout fixes. Install its C6 firmware to get
+those display fixes. Its wire format remains compatible with the November 1 and
+first November 12 bundles. Other mixes can lose newer features, and there is no
+automatic compatibility warning. See
 [the compatibility notes](README.windows.md#desktop-and-firmware-compatibility).

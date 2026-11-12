@@ -4,6 +4,16 @@ Entries are grouped by release date, newest first. Bundle dates identify the
 combined Windows application and C6 firmware release; application file versions
 are recorded separately.
 
+2026-11-12 — windows-c6-2026.11.12.1 (Windows 3.12.2.8)
+- Merge upstream fixes 2cdf2e8 and 30c2f66: correct Nixie weekly decimal
+  rollers, compact-token rounding at unit boundaries and large-value text fitting.
+- Use the same overflow-safe token formatter on our Classic Tasks details page.
+- Fit Classic, Famicom and WALL-E token values within their available columns;
+  show an unavailable value rather than misleading truncated Nixie digits.
+- Present screenshot instructions as a small caption beneath the README images.
+- Advance the desktop release-check baseline. The JSON wire format is unchanged;
+  the new firmware is needed for these display fixes. No automatic installation.
+
 2026-11-12 — windows-c6-2026.11.12 (Windows 3.12.2.7)
 Changes since the 2026-11-01 release. Includes work completed November 1–2.
 - Advance the release-check baseline to this bundle.

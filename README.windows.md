@@ -353,7 +353,10 @@ and health records. Firmware bundles and evidence are under
 Use the desktop executable and **ESP32-C6** factory image from the same dated
 release for the tested combination. The November 12, 2026 bundle uses unchanged
 firmware source from November 1: those releases' clients and firmware can be mixed.
-Existing November 1 displays do not need reflashing for the November 12 desktop fixes.
+Existing November 1 displays do not need reflashing for the first November 12 desktop fixes.
+The November 12 follow-up (`windows-c6-2026.11.12.1`) keeps that wire format but
+updates the firmware for token rounding and theme layout fixes; flash its C6 image
+to receive those display improvements.
 
 The BLE messages use JSON with `v: 1`, but the firmware currently does **not** check
 that version field or negotiate capabilities. A connection/ACK confirms receipt,
