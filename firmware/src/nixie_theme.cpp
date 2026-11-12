@@ -8,6 +8,7 @@
 #include "c6_assets.h"
 #include "theme_fonts.h"
 #include "device_log.h"
+#include "nixie_counter_layout.h"
 
 namespace {
 
@@ -49,6 +50,15 @@ constexpr int TODAY_ROLLER_CELL[] = {0, 1, 3};
 constexpr int TODAY_ROLLER_COUNT = 3;
 constexpr int WEEK_VALUE_X[] = {269, 308, 348};
 constexpr int WEEK_VALUE_W[] = {42, 43, 42};
+constexpr int WEEK_DECIMAL_PANEL_X = 267;
+constexpr int WEEK_DECIMAL_OFFSET_X = WEEK_DECIMAL_PANEL_X - TODAY_INTEGER_PANEL_X;
+// Same three number rollers, 12px decimal roller and unit roller as Today.
+constexpr int DECIMAL_SOURCE_X[] = {47, 86, 125, 137, 176};
+constexpr int DECIMAL_SOURCE_W[] = {39, 39, 12, 39, 27};
+constexpr int WEEK_DECIMAL_VALUE_X[][4] = {
+    {271, 295, 320, 360},  // 1.03: move the narrow roller after digit one.
+    {271, 308, 334, 360},  // 12.3: same arrangement as Today's 96.2.
+};
 constexpr int TODAY_UNIT_X = 178;
 constexpr int TODAY_INTEGER_UNIT_X = 172;
 constexpr int TODAY_UNIT_W = 24;
@@ -82,7 +92,10 @@ struct NixieThemeState {
   lv_obj_t* tube_glows[3]{};
   lv_obj_t* digit_images[3]{};
   lv_obj_t* today_cells[4]{};
-  lv_obj_t* week_cells[3]{};
+  lv_obj_t* week_cells[4]{};
+  lv_obj_t* week_decimal_panel = nullptr;
+  lv_obj_t* week_decimal_rollers[5]{};
+  lv_image_dsc_t week_decimal_dsc[5]{};
   lv_obj_t* today_unit = nullptr;
   lv_obj_t* week_unit = nullptr;
   lv_obj_t* reset_day = nullptr;
@@ -436,10 +449,10 @@ void create_dynamic_layer(NixieThemeState* state) {
         TODAY_VALUE_X[i], COUNTER_VALUE_Y, TODAY_VALUE_W[i]);
     lv_obj_set_style_text_letter_space(state->today_cells[i], 0, 0);
   }
-  for (int i = 0; i < 3; ++i) {
+  for (int i = 0; i < 4; ++i) {
     state->week_cells[i] = make_label(
         state->root, "", counter, IVORY,
-        WEEK_VALUE_X[i], COUNTER_VALUE_Y, WEEK_VALUE_W[i]);
+        WEEK_DECIMAL_VALUE_X[1][i], COUNTER_VALUE_Y, TODAY_VALUE_W[i]);
     lv_obj_set_style_text_letter_space(state->week_cells[i], 0, 0);
   }
   const lv_font_t* reset_font =
@@ -534,15 +547,14 @@ void update_counter_values(
     NixieThemeState* state, const DashboardViewModel& model) {
   const char* today =
       model.has_today_tokens ? model.today_tokens_text : "--";
-  const char* week =
-      model.has_last_7d_tokens ? model.last_7d_tokens_text : "--";
 
   auto update_cells = [](
       lv_obj_t* const* cells, int cell_count, const char* text) {
     size_t length = text ? strlen(text) : 0;
     if (length > static_cast<size_t>(cell_count)) {
-      text += length - cell_count;
-      length = cell_count;
+      // A bad input must never silently discard the most significant digits.
+      text = "--";
+      length = 2;
     }
     int leading = cell_count - static_cast<int>(length);
     for (int i = 0; i < cell_count; ++i) {
@@ -578,8 +590,8 @@ void update_counter_values(
     }
     size_t length = text ? strlen(text) : 0;
     if (length > static_cast<size_t>(roller_count)) {
-      text += length - roller_count;
-      length = roller_count;
+      text = "--";
+      length = 2;
     }
     int leading = roller_count - static_cast<int>(length);
     for (int i = leading; i < roller_count; ++i) {
@@ -606,8 +618,8 @@ void update_counter_values(
   char unit[4];
   split_unit(today, value, sizeof(value), unit, sizeof(unit));
   bool today_integer_layout =
-      model.has_today_tokens && model.today_tokens >= 100000000ULL &&
-      unit[0] == 'M' && value[0] != '\0' && !strchr(value, '.');
+      model.has_today_tokens && unit[0] == 'M' &&
+      strlen(value) == 3 && !strchr(value, '.');
   if (today_integer_layout) {
     lv_obj_clear_flag(state->today_integer_panel, LV_OBJ_FLAG_HIDDEN);
     for (int i = 0; i < 3; ++i) {
@@ -644,11 +656,39 @@ void update_counter_values(
   }
   set_text_if_changed(state->today_unit, unit);
 
-  split_unit(week, value, sizeof(value), unit, sizeof(unit));
-  update_cells(state->week_cells, 3, value);
-  apply_roller_optical_offsets(
-      state->week_cells, 3, WEEK_VALUE_X);
-  set_text_if_changed(state->week_unit, unit);
+  NixieCounterLayout week_layout = nixie_counter_layout(
+      model.has_last_7d_tokens, model.last_7d_tokens);
+  const char* decimal = strchr(week_layout.value, '.');
+  if (decimal) {
+    int arrangement = decimal - week_layout.value - 1;
+    const int* positions = WEEK_DECIMAL_VALUE_X[arrangement];
+    lv_obj_clear_flag(state->week_decimal_panel, LV_OBJ_FLAG_HIDDEN);
+    // Reuse the actual Today artwork, including its narrow decimal slot.
+    const int order[][5] = {{0, 2, 1, 3, 4}, {0, 1, 2, 3, 4}};
+    int x = 0;
+    for (int index : order[arrangement]) {
+      lv_obj_set_x(state->week_decimal_rollers[index], x);
+      x += DECIMAL_SOURCE_W[index];
+    }
+    for (int i = 0; i < 4; ++i) {
+      lv_obj_set_width(state->week_cells[i], TODAY_VALUE_W[i]);
+    }
+    update_cells(state->week_cells, 4, week_layout.value);
+    apply_roller_optical_offsets(state->week_cells, 4, positions);
+    lv_obj_set_x(state->week_unit, TODAY_UNIT_X + WEEK_DECIMAL_OFFSET_X);
+    lv_obj_set_width(state->week_unit, TODAY_UNIT_W);
+  } else {
+    lv_obj_add_flag(state->week_decimal_panel, LV_OBJ_FLAG_HIDDEN);
+    for (int i = 0; i < 3; ++i) {
+      lv_obj_set_width(state->week_cells[i], WEEK_VALUE_W[i]);
+    }
+    set_text_if_changed(state->week_cells[3], "");
+    update_cells(state->week_cells, 3, week_layout.value);
+    apply_roller_optical_offsets(state->week_cells, 3, WEEK_VALUE_X);
+    lv_obj_set_x(state->week_unit, WEEK_UNIT_X);
+    lv_obj_set_width(state->week_unit, WEEK_UNIT_W);
+  }
+  set_text_if_changed(state->week_unit, week_layout.unit);
 }
 
 void update_reset(
@@ -758,6 +798,31 @@ bool nixie_mount(
       state->today_integer_panel,
       TODAY_INTEGER_PANEL_X, TODAY_INTEGER_PANEL_Y);
   lv_obj_add_flag(state->today_integer_panel, LV_OBJ_FLAG_HIDDEN);
+  // Crop views into the existing background: no new asset or pixel allocation.
+  state->week_decimal_panel = lv_obj_create(state->root);
+  strip_obj(state->week_decimal_panel);
+  lv_obj_set_pos(state->week_decimal_panel, WEEK_DECIMAL_PANEL_X, TODAY_INTEGER_PANEL_Y);
+  lv_obj_set_size(state->week_decimal_panel, TODAY_INTEGER_PANEL_W, TODAY_INTEGER_PANEL_H);
+  for (int i = 0; i < 5; ++i) {
+    lv_image_dsc_t& dsc = state->week_decimal_dsc[i];
+    dsc = state->background_dsc;
+    dsc.header.w = DECIMAL_SOURCE_W[i];
+    dsc.header.h = TODAY_INTEGER_PANEL_H;
+    dsc.data = state->background_pixels +
+        (TODAY_INTEGER_PANEL_Y * CODEXMETER_SCREEN_W + DECIMAL_SOURCE_X[i]) * sizeof(uint16_t);
+    // LVGL requires stride * height, including the final row's padding.
+    // These views share the full background allocation, which includes that
+    // padding; reporting only the visible last-row pixels rejects the image.
+    dsc.data_size = dsc.header.stride * TODAY_INTEGER_PANEL_H;
+    lv_draw_buf_t checked_buffer;
+    if (lv_draw_buf_from_image(&checked_buffer, &dsc) != LV_RESULT_OK) {
+      device_logf("ERROR", "nixie decimal roller %d has invalid image buffer", i);
+      return false;
+    }
+    state->week_decimal_rollers[i] = lv_image_create(state->week_decimal_panel);
+    lv_image_set_src(state->week_decimal_rollers[i], &dsc);
+  }
+  lv_obj_add_flag(state->week_decimal_panel, LV_OBJ_FLAG_HIDDEN);
   create_dynamic_layer(state);
   return true;
 }
