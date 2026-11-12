@@ -2,7 +2,7 @@
 
 This private, versioned IPC is deliberately isolated here. It only initializes
 an observer and follows chat state; it never owns a chat, marks it read, or sends
-agent requests. Chat text is discarded immediately after decoding each frame.
+agent requests. Transcript values are skipped in bounded chunks before metadata is decoded.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import uuid
 from .payloads import Payload, build_activity_payload
 
 FIELDS = {"threadRuntimeStatus", "hasUnreadTurn", "parentThreadId", "source"}
-MAX_FRAME = 64 * 1024 * 1024
+from .ipc_projection import CHUNK, receive_metadata
 WAIT_FLAGS = {"waitingOnApproval", "waitingOnUserInput"}
 
 
@@ -125,6 +125,8 @@ class ChatActivity:
         return payload
 
     async def run(self, sink, stop_event):
+        last_failure = None
+        last_logged = 0.0
         while not stop_event.is_set():
             try:
                 await self._observe(sink, stop_event)
@@ -133,7 +135,16 @@ class ChatActivity:
             except Exception as exc:
                 # An incompatible private protocol must never take down BLE,
                 # quota sync, or the tray. Cancellation is handled above.
-                logging.warning("Codex chat observer reconnecting: %s", type(exc).__name__)
+                # Record code locations only: exception messages/locals may contain chat text.
+                import traceback
+                locations = [(Path(f.filename).name, f.name, f.lineno)
+                             for f in traceback.extract_tb(exc.__traceback__)]
+                failure = (type(exc).__name__, locations)
+                now = time.monotonic()
+                if failure != last_failure or now - last_logged >= 300:
+                    logging.warning("Codex chat observer reconnecting: %s locations=%s",
+                                    type(exc).__name__, locations)
+                    last_failure, last_logged = failure, now
             self.payload = self._payload(False)
             await sink(self.payload)
             try:
@@ -142,7 +153,7 @@ class ChatActivity:
                 pass
 
     async def _observe(self, sink, stop_event):
-        reader = asyncio.StreamReader(limit=MAX_FRAME)
+        reader = asyncio.StreamReader(limit=CHUNK)
         protocol = asyncio.StreamReaderProtocol(reader)
         transport, _ = await asyncio.get_running_loop().create_pipe_connection(
             lambda: protocol, r"\\.\pipe\codex-ipc")
@@ -152,10 +163,7 @@ class ChatActivity:
             transport.write(struct.pack("<I", len(raw)) + raw)
 
         async def receive():
-            size = struct.unpack("<I", await reader.readexactly(4))[0]
-            if not 0 < size <= MAX_FRAME:
-                raise ValueError("Invalid IPC frame size")
-            return json.loads(await reader.readexactly(size))
+            return await receive_metadata(reader)
 
         pending = None
         try:
