@@ -1,6 +1,7 @@
 #include "classic_theme.h"
 
 #include "theme_text_fit.h"
+#include "compact_tokens.h"
 
 #include <math.h>
 #include <string.h>
@@ -335,13 +336,6 @@ void update_battery(ClassicThemeState* state, int pct, bool charging) {
       state->top_battery_fill, battery_fill_color(pct), 0);
 }
 
-void format_count(char* text, size_t size, uint64_t value) {
-  if (value >= 1000000000ULL) snprintf(text, size, "%.2fB", value / 1e9);
-  else if (value >= 1000000ULL) snprintf(text, size, "%.1fM", value / 1e6);
-  else if (value >= 1000ULL) snprintf(text, size, "%.1fK", value / 1e3);
-  else snprintf(text, size, "%llu", (unsigned long long)value);
-}
-
 void format_cost(char* text, size_t size, uint64_t cents, bool valid, bool partial) {
   if (!valid) snprintf(text, size, "--");
   else if (cents >= 1000000ULL) snprintf(text, size, "$%.1fK%s", cents / 1e5, partial ? "+" : "");
@@ -368,7 +362,7 @@ void update_details(ClassicThemeState* state, const DashboardViewModel& model) {
     char text[32];
     uint64_t tokens = i < 3 ? b.tokens[i] : (model.detail_week ? model.last_7d_tokens : model.today_tokens);
     uint64_t cents = i < 3 ? b.cents[i] : b.cents[0] + b.cents[1] + b.cents[2];
-    if (b.valid) format_count(text, sizeof(text), tokens);
+    if (b.valid) format_compact_tokens(text, sizeof(text), true, tokens, true);
     else strlcpy(text, "--", sizeof(text));
     lv_label_set_text(state->detail_tokens[i], text);
     format_cost(text, sizeof(text), cents, b.valid, b.partial);
