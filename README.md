@@ -6,10 +6,10 @@
     <td><img src="docs/assets/windows-c6/classic-tasks.png" width="400" alt="Dashboard with token totals, API cost estimates, weekly quota, days-and-hours reset countdown and chat counts"></td>
     <td><img src="docs/assets/windows-c6/token-details.png" width="400" alt="Token details with Today and 7 days selection, uncached input, cached input, output and API cost estimates"></td>
   </tr>
+  <tr>
+    <td colspan="2"><sub>Actual C6 screenshots; captured values are examples, not live data. Swipe horizontally to switch pages; tap <strong>Today</strong> or <strong>7 days</strong> on the details page.</sub></td>
+  </tr>
 </table>
-
-Actual C6 screenshots. Swipe horizontally to switch pages; tap **Today** or
-**7 days** on the details page. Values are examples from the capture, not live data.
 
 An English Windows companion and Waveshare ESP32-C6 port of
 [tomatoeggs/CodexMeter](https://github.com/tomatoeggs/CodexMeter).
