@@ -16,3 +16,6 @@ firmware/.vscode/
 *.log
 *.lnk
 .DS_Store
+
+# Local hardware probe observations; retain privately, not in Git.
+.plans/**/hardware/
