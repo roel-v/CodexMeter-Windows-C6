@@ -29,11 +29,16 @@
 #define BUF_LINES CODEXMETER_DRAW_BUFFER_LINES
 #endif
 
+#ifdef CODEXMETER_BOARD_BALL
+static Arduino_DataBus* bus = new Arduino_ESP32SPI(47, 5, 4, 2, -1);
+static CodexMeterPanel* gfx = new CodexMeterPanel(bus);
+#else
 static Arduino_DataBus* bus = new Arduino_ESP32QSPI(
     CODEXMETER_LCD_CS, CODEXMETER_LCD_SCLK, CODEXMETER_LCD_D0, CODEXMETER_LCD_D1,
     CODEXMETER_LCD_D2, CODEXMETER_LCD_D3);
 static CodexMeterPanel* gfx = new CodexMeterPanel(
     bus, CODEXMETER_LCD_RST, 0, CODEXMETER_SCREEN_W, CODEXMETER_SCREEN_H, 0, 0, 0, 0);
+#endif
 
 enum class GpioButtonEvent : uint8_t {
   None,
@@ -425,9 +430,9 @@ static void handle_json(const char* json) {
     last_host_payload_ms = millis();
   }
   if (kind == PAYLOAD_USAGE || kind == PAYLOAD_ACTIVITY || kind == PAYLOAD_ALERT) {
-    const bool was_waiting = ui_is_waiting();
+    // Waiting is a visible view, not a power state. Data must never undo an
+    // explicit local/host screen-off request, including after reconnection.
     ui_set_waiting(false);
-    if (was_waiting) set_screen_on(true, "companion_data");
   }
   if (kind == PAYLOAD_USAGE) {
     last_usage_ms = millis();
@@ -481,7 +486,11 @@ static void handle_json(const char* json) {
         activity.chat_counts_valid);
     ble_service_ack();
   } else if (kind == PAYLOAD_CONTROL) {
-    if (strcmp(control.command, "screen") == 0) {
+    if (strcmp(control.command, "brightness") == 0) {
+      set_brightness_percent(control.value,"companion"); ble_service_ack();
+    } else if (strcmp(control.command, "rotation") == 0) {
+      if (imu_set_rotation_quadrant(control.value/90)) ble_service_ack(); else ble_service_nack();
+    } else if (strcmp(control.command, "screen") == 0) {
       set_screen_on(control.screen_on, control.reason);
       device_logf(
           "INFO", "control screen=%d reason=%s", control.screen_on ? 1 : 0,
@@ -788,6 +797,18 @@ static GpioButtonEvent take_gpio_button_event(GpioButtonState* button) {
 }
 
 static void handle_button() {
+#ifdef CODEXMETER_BOARD_BALL
+  static bool was_down = false;
+  static uint32_t pressed = 0;
+  bool down = digitalRead(0) == LOW;
+  if (down && !was_down) pressed = millis();
+  if (!down && was_down && millis()-pressed >= 50 && millis()-pressed <= 800 && screen_on) {
+    if (ui_alert_visible()) ui_dismiss_alert();
+    else ui_touch_gesture(-120, 0, 120, 120, false);
+  }
+  was_down = down;
+  return;
+#else
   static GpioButtonState left = {
       CODEXMETER_BUTTON_LEFT_PIN, false, false, false, 0, 0};
   static GpioButtonState right = {
@@ -832,6 +853,7 @@ static void handle_button() {
       power_event == PowerKeyEvent::ShortPress && screen_on) {
     ui_middle_short_press();
   }
+#endif
 }
 
 static void handle_ble_screen_policy() {

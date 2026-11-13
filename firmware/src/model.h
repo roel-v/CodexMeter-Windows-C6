@@ -49,6 +49,7 @@ struct ActivityModel {
 struct ControlModel {
   bool valid = false;
   bool screen_on = true;
+  int value = -1;
   char command[16] = "";
   char reason[32] = "";
   long updated_at = 0;

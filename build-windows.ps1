@@ -3,7 +3,7 @@ param(
     [string]$BuildRoot = 'D:\build\CodexMeter',
     [switch]$Firmware,
     [switch]$Test,
-    [ValidateSet('waveshare_c6_amoled_216', 'waveshare_amoled_216')]
+    [ValidateSet('waveshare_c6_amoled_216', 'waveshare_amoled_216', 'spotpear_ball_v2')]
     [string]$Board = 'waveshare_c6_amoled_216'
 )
 $ErrorActionPreference = 'Stop'

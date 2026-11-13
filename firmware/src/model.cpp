@@ -93,6 +93,16 @@ PayloadKind parse_payload(
 
   if (strcmp(kind, "control") == 0) {
     const char* command = doc["cmd"] | "";
+    if ((strcmp(command, "brightness") == 0 || strcmp(command, "rotation") == 0) && doc["value"].is<int>()) {
+      int value = doc["value"].as<int>();
+      if ((strcmp(command,"brightness")==0 && value>=10 && value<=100) ||
+          (strcmp(command,"rotation")==0 && (value==0 || value==90 || value==180 || value==270))) {
+        control->valid=true; control->value=value;
+        copy_text(control->command,sizeof(control->command),command);
+        return PAYLOAD_CONTROL;
+      }
+      return PAYLOAD_NONE;
+    }
     if (strcmp(command, "screen") == 0) {
       control->valid = true;
       control->screen_on = doc["on"] | true;

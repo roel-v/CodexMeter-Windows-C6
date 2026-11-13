@@ -9,7 +9,7 @@ static bool initialized = false;
 static char device_id[32];
 static char short_id[8];
 static char ble_name[32];
-static char json[128];
+static char json[513];
 
 void identity_init() {
   if (initialized) return;
@@ -27,9 +27,18 @@ void identity_init() {
            (unsigned long long)chip);
   snprintf(short_id, sizeof(short_id), "%06lX", (unsigned long)short_value);
   snprintf(ble_name, sizeof(ble_name), "%s-%s", CODEXMETER_DEVICE_NAME, short_id);
+#ifdef CODEXMETER_BOARD_BALL
+  int length = snprintf(json,sizeof(json),
+      "{\"device_id\":\"%s\",\"short_id\":\"%s\",\"name\":\"%s\","
+      "\"model\":\"spotpear_ball_v2\",\"firmware\":\"3.12.3.0\",\"protocol\":1,"
+      "\"width\":240,\"height\":240,\"capabilities\":[\"brightness\",\"rotation\",\"touch\",\"screen\"]}",
+      device_id,short_id,ble_name);
+  if(length<0 || length>=sizeof(json)) abort();
+#else
   snprintf(json, sizeof(json),
            "{\"device_id\":\"%s\",\"short_id\":\"%s\",\"name\":\"%s\"}",
            device_id, short_id, ble_name);
+#endif
   initialized = true;
 }
 

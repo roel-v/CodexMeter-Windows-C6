@@ -4,12 +4,30 @@
 
 #define CODEXMETER_DEVICE_NAME "CodexMeter"
 
+#ifdef CODEXMETER_BOARD_BALL
+#define CODEXMETER_SCREEN_W 240
+#define CODEXMETER_SCREEN_H 240
+#else
 #define CODEXMETER_SCREEN_W 480
 #define CODEXMETER_SCREEN_H 480
+#endif
 
 // Waveshare ESP32-S3-Touch-AMOLED-2.16 QSPI AMOLED defaults. Keep all board
 // pins here so hardware revisions can be adjusted without touching UI logic.
-#ifdef CODEXMETER_BOARD_C6
+#if defined(CODEXMETER_BOARD_BALL)
+#define CODEXMETER_LCD_CS 5
+#define CODEXMETER_LCD_SCLK 4
+#define CODEXMETER_LCD_MOSI 2
+#define CODEXMETER_LCD_DC 47
+#define CODEXMETER_LCD_RST 38
+#define CODEXMETER_LCD_BL 42
+#define CODEXMETER_I2C_SDA 11
+#define CODEXMETER_I2C_SCL 7
+#define CODEXMETER_BUTTON_LEFT_PIN 0
+#define CODEXMETER_BUTTON_RIGHT_PIN 0
+#define CODEXMETER_IMU_Y_SIGN 1
+#define CODEXMETER_IMU_ROTATION_OFFSET 0
+#elif defined(CODEXMETER_BOARD_C6)
 // Waveshare vendor Arduino-v3.3.3/09_LVGL_V9_Test/user_config.h.
 // The vendor implementation uses SH8601 commands despite the CO5300 product label.
 #define CODEXMETER_LCD_CS 15
