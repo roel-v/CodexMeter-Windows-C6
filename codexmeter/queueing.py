@@ -17,7 +17,8 @@ async def put_latest(queue: "asyncio.Queue[Payload]", payload: Payload) -> None:
                 existing = queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
-            if existing.kind != payload.kind:
+            if (existing.kind != payload.kind or
+                    (payload.kind == "control" and existing.data.get("cmd") != payload.data.get("cmd"))):
                 kept.append(existing)
         for existing in kept:
             await queue.put(existing)

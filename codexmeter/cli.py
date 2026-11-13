@@ -133,6 +133,7 @@ async def run_devices_rename(args: argparse.Namespace) -> int:
         name=device.name,
         macos_uuid=device.macos_uuid,
         legacy=device.legacy,
+        metadata=device.metadata,
     )
     registry.upsert(updated)
     registry.save()
@@ -154,6 +155,7 @@ async def run_devices_enabled(args: argparse.Namespace) -> int:
         name=device.name,
         macos_uuid=device.macos_uuid,
         legacy=device.legacy,
+        metadata=device.metadata,
     )
     registry.upsert(updated)
     registry.save()

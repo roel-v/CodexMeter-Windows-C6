@@ -7,10 +7,12 @@ import json
 import logging
 import re
 import sys
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from .payloads import Payload
+from .device_metadata import DeviceMetadata, MAX_IDENTITY_BYTES
 from .settings import (
     BLE_ACK_TIMEOUT_SEC,
     BLE_CONNECT_TIMEOUT_SEC,
@@ -126,9 +128,12 @@ class BleIdentity:
     device_id: str
     short_id: str
     name: str
+    metadata: DeviceMetadata = DeviceMetadata()
 
     @classmethod
     def from_bytes(cls, raw: bytes | bytearray) -> "BleIdentity":
+        if len(raw) > MAX_IDENTITY_BYTES:
+            raise BleIdentityError("BLE identity exceeds 512 bytes")
         try:
             data = json.loads(bytes(raw).decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -152,7 +157,11 @@ class BleIdentity:
             raise BleIdentityError("BLE identity device id does not match its short id")
         if normalized_name != f"{DEVICE_NAME}-{normalized_short_id}":
             raise BleIdentityError("BLE identity name does not match its short id")
-        return cls(normalized_device_id, normalized_short_id, normalized_name)
+        try:
+            metadata = DeviceMetadata.from_json(data)
+        except ValueError as exc:
+            raise BleIdentityError(str(exc)) from exc
+        return cls(normalized_device_id, normalized_short_id, normalized_name, metadata)
 
 
 class BleAckTracker:
@@ -189,6 +198,7 @@ class BleState:
     last_payload: Payload | None = None
     connect_control: Payload | None = None
     desired_control: Payload | None = None
+    desired_settings: dict[str, Payload] = field(default_factory=dict)
     pending_alert: Payload | None = None
     observed_device_id: str | None = None
     connected: bool = False
@@ -415,6 +425,8 @@ class BleTransport:
                         client, reconnect_control, ack_tracker, state
                     )
                     used_successfully = True
+                for setting in list(state.desired_settings.values()):
+                    await self._write_payload(client, setting, ack_tracker, state)
                 if state.last_usage is not None:
                     await self._write_payload(
                         client, state.last_usage, ack_tracker, state
@@ -425,6 +437,8 @@ class BleTransport:
                         client, state.last_activity, ack_tracker, state
                     )
                     used_successfully = True
+                if state.pending_alert is not None and not self._should_write_payload(state.pending_alert, state):
+                    state.pending_alert = None
                 if state.pending_alert is not None:
                     pending_alert = state.pending_alert
                     await self._write_reliably(
@@ -589,12 +603,15 @@ class BleTransport:
     @staticmethod
     def _remember_payload(payload: Payload, state: BleState) -> None:
         state.last_payload = payload
-        if payload.kind == "usage":
+        if payload.kind == "usage" and state.last_usage is None:
             state.last_usage = payload
-        elif payload.kind == "activity":
+        elif payload.kind == "activity" and state.last_activity is None:
             state.last_activity = payload
         elif payload.kind == "control":
-            state.desired_control = payload
+            if payload.data.get("cmd") in ("brightness", "rotation"):
+                state.desired_settings.setdefault(str(payload.data["cmd"]), payload)
+            elif state.desired_control is None:
+                state.desired_control = payload
 
     @staticmethod
     def remember_desired(payload: Payload, state: BleState) -> None:
@@ -603,7 +620,10 @@ class BleTransport:
         elif payload.kind == "activity":
             state.last_activity = payload
         elif payload.kind == "control":
-            state.desired_control = payload
+            if payload.data.get("cmd") in ("brightness", "rotation"):
+                state.desired_settings[str(payload.data["cmd"])] = payload
+            else:
+                state.desired_control = payload
 
     @staticmethod
     def _require_ack(payload: Payload, text: str) -> None:
@@ -615,6 +635,15 @@ class BleTransport:
             raise BleAckError(f"BLE NACK for {payload.kind}: {text}")
 
     def _should_write_payload(self, payload: Payload, state: BleState) -> bool:
+        if payload.kind == "alert":
+            timestamp = payload.data.get("t")
+            return type(timestamp) in (int, float) and 0 <= time.time() - timestamp <= 60
+        latest = state.last_usage if payload.kind == "usage" else state.last_activity if payload.kind == "activity" else None
+        if latest is not None and latest is not payload:
+            return False
+        if payload.kind == "control" and payload.data.get("cmd") in ("brightness", "rotation"):
+            desired = state.desired_settings.get(payload.data["cmd"])
+            return desired is None or desired is payload
         if payload.kind != "control":
             return True
         if payload.data.get("cmd") != "screen":

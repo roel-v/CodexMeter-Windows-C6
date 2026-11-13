@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .persistence import atomic_write_json
+from .device_metadata import DeviceMetadata
 from .settings import DEVICE_NAME, DEVICES_FILE
 
 DEVICE_NAME_PREFIX = f"{DEVICE_NAME}-"
@@ -25,6 +26,7 @@ class DeviceConfig:
     name: str | None = None
     macos_uuid: str | None = None
     legacy: bool = False
+    metadata: DeviceMetadata = DeviceMetadata()
 
     @property
     def label(self) -> str:
@@ -38,6 +40,8 @@ class DeviceConfig:
         name: str | None = None,
         address: str | None = None,
     ) -> bool:
+        if is_full_device_id(device_id) and is_full_device_id(self.device_id):
+            return normalize_device_id(device_id) == normalize_device_id(self.device_id)
         if device_id and normalize_device_id(device_id) == normalize_device_id(self.device_id):
             return True
         if short_id and self.short_id and normalize_short_id(short_id) == self.short_id:
@@ -65,6 +69,7 @@ class DeviceConfig:
             data["macos_uuid"] = self.macos_uuid
         if self.legacy:
             data["legacy"] = True
+        data.update(self.metadata.to_json())
         return data
 
     @classmethod
@@ -86,6 +91,7 @@ class DeviceConfig:
             name=_optional_str(data.get("name")),
             macos_uuid=_optional_str(data.get("macos_uuid")),
             legacy=bool(data.get("legacy", False)),
+            metadata=DeviceMetadata.from_json(data),
         )
 
 

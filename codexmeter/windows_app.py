@@ -32,7 +32,7 @@ class MeterApp:
         frame = ttk.Frame(root, padding=20)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text="CodexMeter", font=("Segoe UI", 22, "bold")).pack(anchor="w")
-        ttk.Label(frame, text="Codex usage and task alerts on your Waveshare display").pack(anchor="w", pady=(0, 16))
+        ttk.Label(frame, text="Codex usage and task alerts on your displays").pack(anchor="w", pady=(0, 16))
         path_row = ttk.Frame(frame)
         path_row.pack(fill="x", pady=4)
         ttk.Label(path_row, text="Codex executable").pack(side="left", padx=(0, 10))
@@ -58,6 +58,8 @@ class MeterApp:
         for label, args in [("Test alert", ("demo-alert", "CodexMeter is connected.")),
                             ("Screen on", ("screen-on",)), ("Screen off", ("screen-off",))]:
             ttk.Button(controls, text=label, command=lambda a=args: self.command(*a)).pack(side="left", padx=(0, 5))
+        from .device_dialog import show_devices
+        ttk.Button(controls, text="Displays", command=lambda: show_devices(self.root)).pack(side="left", padx=5)
         ttk.Button(controls, text="Open log", command=self.open_log).pack(side="left")
         ttk.Button(controls, text="Tokens / pricing", command=self.open_pricing).pack(side="left", padx=5)
         from .update_dialog import show_updates

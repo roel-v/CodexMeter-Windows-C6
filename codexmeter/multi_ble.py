@@ -6,7 +6,7 @@ import asyncio
 import logging
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Awaitable, Callable
 
 from .ble import (
@@ -223,6 +223,8 @@ class DeviceSlot:
                 "enabled": self.config.enabled,
             }
         )
+        data.update(self.config.metadata.to_json())
+        data["compatibility"] = self.config.metadata.compatibility
         return data
 
 
@@ -311,8 +313,12 @@ class DeviceWorker:
             raise BleIdentityError(
                 f"BLE identity name {identity.name} does not match {expected_name}"
             )
-        if self.identity_observer is not None and not is_full_device_id(config.device_id):
+        if self.identity_observer is not None:
             self.slot.config = self.identity_observer(config, identity)
+        else:
+            self.slot.config = replace(config, metadata=identity.metadata)
+        if not identity.metadata.compatible:
+            raise BleIdentityError(f"Unsupported display protocol {identity.metadata.protocol}; update the companion")
 
 
 class DeviceManager:
@@ -373,6 +379,35 @@ class DeviceManager:
         for slot in self.slots:
             BleTransport.remember_desired(payload, slot.state)
             await put_latest(slot.queue, payload)
+
+    async def control_device(self, event: dict) -> dict:
+        device_id = event.get("device_id")
+        slot = next((s for s in self.slots if s.config.device_id == device_id), None)
+        if slot is None:
+            raise ValueError("Select an enabled registered display")
+        if not slot.config.metadata.compatible:
+            raise ValueError("Display protocol is incompatible")
+        command = event.get("command")
+        capability = {"screen": "screen", "brightness": "brightness", "rotation": "rotation"}.get(command)
+        if capability is None:
+            raise ValueError("Unknown display control")
+        supported = slot.config.metadata.supports(capability)
+        if supported is False or (supported is None and command != "screen"):
+            raise ValueError("Display does not advertise this control")
+        value = event.get("value")
+        if command == "screen":
+            if type(value) is not bool:
+                raise ValueError("Screen value must be boolean")
+            data = {"k": "control", "cmd": "screen", "on": value, "why": "manual"}
+        else:
+            if type(value) is not int or (command == "brightness" and not 10 <= value <= 100) or (command == "rotation" and value not in (0,90,180,270)):
+                raise ValueError("Invalid display setting")
+            data = {"k": "control", "cmd": command, "value": value}
+        data["t"] = int(time.time())
+        payload = Payload("control", data)
+        BleTransport.remember_desired(payload, slot.state)
+        await put_latest(slot.queue, payload)
+        return {"ok": True, "queued": command, "device_id": device_id}
 
     def set_connect_control(self, payload: Payload | None) -> None:
         for slot in self.slots:

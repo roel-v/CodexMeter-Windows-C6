@@ -305,7 +305,8 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
     registry = DeviceRegistry.load()
 
     def bind_identity(config: DeviceConfig, identity: BleIdentity) -> DeviceConfig:
-        if config.device_id == identity.device_id and config.name == identity.name:
+        if (config.device_id == identity.device_id and config.name == identity.name
+                and config.metadata == identity.metadata):
             return config
         updated = DeviceConfig(
             device_id=identity.device_id,
@@ -315,6 +316,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
             name=identity.name,
             macos_uuid=config.macos_uuid,
             legacy=False,
+            metadata=identity.metadata,
         )
         registry.upsert(updated)
         try:
@@ -384,6 +386,7 @@ async def run_daemon(args: argparse.Namespace, desktop=None, diagnostics=None) -
         activity_sweep_interval=args.activity_sweep_interval,
         verify_task_starts=True,
         open_control_panel=desktop.open_control_panel if desktop is not None else None,
+        device_controller=manager.control_device,
     )
 
     await supervise(

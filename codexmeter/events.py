@@ -227,11 +227,13 @@ class EventServer:
         activity_sweep_interval: float = ACTIVITY_SWEEP_INTERVAL_SEC,
         verify_task_starts: bool = False,
         open_control_panel: Callable[[], None] | None = None,
+        device_controller=None,
     ) -> None:
         self.sink = sink
         self.socket_path = socket_path
         self.status_provider = status_provider
         self.open_control_panel = open_control_panel
+        self.device_controller = device_controller
         self.server: asyncio.AbstractServer | None = None
         self.auth_token: str | None = None
         self.stop_event: asyncio.Event | None = None
@@ -303,6 +305,10 @@ class EventServer:
 
     async def _dispatch(self, event: dict[str, Any]) -> dict[str, Any]:
         event_type = event.get("type")
+        if event_type == "device_control":
+            if self.device_controller is None:
+                raise ValueError("Device controls unavailable")
+            return await self.device_controller(event)
         if event_type == "open_control_panel" and self.open_control_panel is not None:
             self.open_control_panel()
             return {"ok": True, "queued": "open_control_panel"}
@@ -356,6 +362,10 @@ class EventServer:
 
     async def _dispatch_activity(self, event: dict[str, Any]) -> dict[str, Any]:
         event_type = event.get("type")
+        if event_type == "device_control":
+            if self.device_controller is None:
+                raise ValueError("Device controls unavailable")
+            return await self.device_controller(event)
         if event_type == "task_start":
             if self.verify_task_starts:
                 verification = self.transcripts.verify_user_turn_start(

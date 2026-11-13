@@ -35,6 +35,15 @@ def self_test(output: Path) -> int:
             if isinstance(child_window, tk.Toplevel):
                 child_window.destroy()
         result["pricing_panel"] = True
+        from .device_dialog import show_devices
+        show_devices(root)
+        root.update()
+        display_dialog = next(w for w in root.winfo_children()
+                              if isinstance(w, tk.Toplevel) and w.title().endswith("Displays"))
+        display_dialog.withdraw()
+        root.update()
+        display_dialog.destroy()
+        result["displays_panel"] = True
         import tempfile
         from .update_dialog import show_updates
         from .updates import UpdateStore
