@@ -19,8 +19,8 @@ REPOSITORY = "roel-v/CodexMeter-Windows-C6"
 RELEASES_URL = f"https://github.com/{REPOSITORY}/releases"
 API_URL = f"https://api.github.com/repos/{REPOSITORY}/releases/latest"
 # Advance this baseline when cutting a new dated Windows/C6 bundle.
-CURRENT_RELEASE = "windows-c6-2026.11.13"
-APP_VERSION = "3.12.2.9"
+CURRENT_RELEASE = "windows-c6-2026.11.13.1"
+APP_VERSION = "3.12.3.0"
 _LOCK = threading.RLock()
 
 

@@ -1,4 +1,4 @@
-# CodexMeter — Windows & ESP32-C6
+# CodexMeter — Windows, ESP32-C6 & Spotpear Ball
 
 <table>
   <tr><th>Classic Tasks — dashboard</th><th>Classic Tasks — token details</th></tr>
@@ -13,7 +13,7 @@
 
 An English Windows companion and Waveshare ESP32-C6 port of
 [tomatoeggs/CodexMeter](https://github.com/tomatoeggs/CodexMeter).
-Keep your Codex quota, local token activity and chat status on a small AMOLED
+Keep your Codex quota, local token activity and chat status on a small
 screen beside your computer.
 
 This fork adds a standalone Windows tray app, support for the
@@ -22,12 +22,38 @@ It retains the original project's history, license and themes.
 Our maintained branch is **`windows-c6`**.
 
 **[Windows setup and flashing](README.windows.md)** ·
+**[Ball setup and mixed displays](docs/spotpear-ball.md)** ·
 **[Token details and pricing history](docs/token-pricing.md)** ·
 **[Changelog](CHANGELOG.txt)** ·
 **[Implementation notes](docs/windows-port.md)** ·
 **[Original upstream README (Chinese)](README.upstream.md)**
 
-## On the display
+## Spotpear Ball — three pages
+<p>
+  <img src="docs/assets/spotpear-ball/ball-photo.jpg" width="480" alt="CodexMeter running on a physical Spotpear Ball, showing weekly quota, reset countdown and running, waiting and done chat counts"><br>
+  <sub>CodexMeter running on the Spotpear Ball. Values shown are from the photograph.</sub>
+</p>
+
+<table>
+  <tr><th>Quota and tasks</th><th>Today</th><th>7 days</th></tr>
+  <tr>
+    <td><img src="docs/assets/spotpear-ball/quota-tasks.png" width="240" alt="Ball quota and task counts"></td>
+    <td><img src="docs/assets/spotpear-ball/today.png" width="240" alt="Ball Today token and API-cost breakdown"></td>
+    <td><img src="docs/assets/spotpear-ball/seven-days.png" width="240" alt="Ball seven-day token and API-cost breakdown"></td>
+  </tr>
+  <tr><td colspan="3"><sub>Actual 240 × 240 Ball framebuffers with synthetic example values. Swipe left/right or press BOOT briefly; the chosen page stays selected.</sub></td></tr>
+</table>
+
+The tested Spotpear ESP32-S3 Ball V2 uses one Classic Tasks layout with three
+peer pages. One Windows companion can drive it alongside the C6. Open
+**Displays** to inspect each connection and change supported settings separately.
+See the [Ball guide](docs/spotpear-ball.md) for the exact hardware, safe flashing,
+legacy compatibility and validation limits. USB/battery icons and automatic
+rotation are omitted on the Ball because the necessary signals are not verified.
+
+<img src="docs/assets/spotpear-ball/mixed-displays.png" width="760" alt="Windows Displays panel with C6 and Ball connected and independent Ball controls">
+
+## On the C6 display
 
 These are actual 480 × 480 screenshots captured from the C6, not mockups.
 The numbers are examples from the capture, not live values.
@@ -139,9 +165,9 @@ machine; the scripts do not silently fall back to another build drive.
   discovery remains automatic.
 - The C6's static fonts cover the English/Latin UI, not arbitrary Unicode text.
   Touch navigation is supported in Classic Tasks; audio is not implemented.
-- The macOS and S3 code paths are retained. The physical hardware used for this
-  port's validation is the C6; see the [validation notes](docs/windows-port.md#verification)
-  for what was checked and what remains outside that coverage.
+- The original macOS/S3 code paths are retained. Physical validation covers one C6
+  and one Ball together. Sleep/resume and the sustained-run test were deferred to
+  production; see the [Ball validation scope](docs/spotpear-ball.md#compatibility-and-validation).
 - Diagnostics stay local and do not upload reports. They help investigate
   failures; there is no automatic app-restart watchdog. Some ordinary companion
   logs can contain task summaries, so review them before sharing.
@@ -160,9 +186,8 @@ attribution.
 
 ### Mixing desktop and firmware releases
 
-The November 12, 2026 follow-up bundle (`windows-c6-2026.11.12.1`) includes
-upstream token-rounding and theme-layout fixes. Install its C6 firmware to get
-those display fixes. Its wire format remains compatible with the November 1 and
-first November 12 bundles. Other mixes can lose newer features, and there is no
-automatic compatibility warning. See
-[the compatibility notes](README.windows.md#desktop-and-firmware-compatibility).
+The 3.12.3.0 companion retains legacy C6 support and adds the Ball metadata/control
+contract. Explicitly unsupported protocol versions are reported per device; missing
+metadata is treated as legacy. Older firmware may lack newer features even when
+basic data delivery works. Use the correct board image and see the
+[compatibility matrix](docs/spotpear-ball.md#compatibility-and-validation).

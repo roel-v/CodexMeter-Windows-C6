@@ -4,6 +4,18 @@ Entries are grouped by release date, newest first. Bundle dates identify the
 combined Windows application and C6 firmware release; application file versions
 are recorded separately.
 
+2026-11-13 — windows-c6-2026.11.13.1 (Windows 3.12.3.0)
+- Add Spotpear Ball V2 firmware: quota/tasks, Today and seven-day detail pages,
+  bidirectional swipe/BOOT navigation, retained page, waiting view and alerts.
+- Add independent mixed-model display status and supported controls to Windows.
+  Validate metadata/protocol/capabilities while retaining legacy C6 support.
+- Improve reconnect delivery: per-command setting coalescing, late-ACK protection
+  and 60-second completion-event expiry. Preserve explicit screen-off on data return.
+- Include matching Ball/C6 images, actual Ball captures and setup/compatibility docs.
+- Validate two physical displays, 10 reconnect cycles each and targeted controls.
+  Sleep/resume and four-hour soak deferred to production by explicit user request;
+  these checks are not represented as passed. Physical capacity beyond two is untested.
+
 2026-11-13 — windows-c6-2026.11.13 (Windows 3.12.2.9)
 - Replace the vague pricing-page warning with an explanation of what changed,
   what saved rates are used for, and how to review the update.

@@ -1,9 +1,12 @@
-# CodexMeter for Windows and Waveshare ESP32-C6
+# CodexMeter for Windows, Waveshare C6 and Spotpear Ball
 
 This local port adds a Windows control panel and background Bluetooth bridge to
 [tomatoeggs/CodexMeter](https://github.com/tomatoeggs/CodexMeter), plus an English,
 memory-conscious firmware target for **ESP32-C6-Touch-AMOLED-2.16(-EN)**.
 The original firmware target is for the **S3**, not the C6.
+
+For the round Spotpear Ball V2, three-page navigation, per-display controls and
+firmware compatibility, see the [Ball and mixed-display guide](docs/spotpear-ball.md).
 
 ## Release notifications
 
