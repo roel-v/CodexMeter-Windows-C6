@@ -80,7 +80,12 @@ class PricingStore:
 
     def status(self):
         try:
-            return json.loads((self.root / "status.json").read_text(encoding="utf-8"))
+            state = json.loads((self.root / "status.json").read_text(encoding="utf-8"))
+            if state.get("state") == "changed":
+                state["message"] = ("OpenAI updated its pricing webpage. This may be a text change, not a price change. "
+                                    "Your cost estimates still use your saved rates. "
+                                    "Use Review pricing change to see what differs and decide whether to accept it.")
+            return state
         except (OSError, ValueError):
             return {"state": "unchecked", "message": "Pricing source has not been checked yet."}
 
@@ -110,7 +115,7 @@ class PricingStore:
                 atomic_write_json(self.root / "pending.json", candidate)
             status = {"state": "changed" if changed else "current", "checked_at": now.timestamp(),
                       "source_sha256": digest, "active_revision": latest["effective_from"],
-                      "message": ("OpenAI pricing page changed; rates may be unchanged. Click to compare with saved pricing history. Saved rates remain in use."
+                      "message": ("OpenAI updated its pricing webpage. Your cost estimates still use your saved rates. Open the control panel and choose Review pricing change to see whether prices differ."
                                   if changed else "Official pricing source matches the saved rates.")}
         except Exception as exc:
             status = {**previous, "state": "error", "checked_at": now.timestamp(),

@@ -100,7 +100,7 @@ class WindowsTray:
         from .windows_app import show_pricing_notice
         def review():
             self._show_panel()
-            self.app.open_pricing()
+            self.app.open_pricing(review_pending=True)
         self.pricing_dialog = show_pricing_notice(self.root, review)
 
     def quit(self):

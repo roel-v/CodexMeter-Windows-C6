@@ -64,6 +64,8 @@ class MeterApp:
         ttk.Button(controls, text="Updates", command=lambda: show_updates(self.root)).pack(side="left", padx=5)
         self.pricing_status = tk.StringVar()
         ttk.Label(frame, textvariable=self.pricing_status, wraplength=720, foreground="#9b5800").pack(anchor="w")
+        self.pricing_review_button = ttk.Button(frame, text="Review pricing change…",
+                                               command=lambda: self.open_pricing(review_pending=True))
         self.pricing_poll_count = 0
         ttk.Label(frame, textvariable=self.status, wraplength=720).pack(anchor="w", pady=6)
         self.output = tk.Text(frame, wrap="word", font=("Consolas", 10), height=15, state="disabled")
@@ -150,6 +152,10 @@ class MeterApp:
             from .pricing import PricingStore
             state = PricingStore().status()
             self.pricing_status.set(state["message"] if state.get("state") != "current" else "")
+            if state.get("state") == "changed":
+                self.pricing_review_button.pack(anchor="w", pady=(4, 6), before=self.output)
+            else:
+                self.pricing_review_button.pack_forget()
         try:
             success, text = self.results.get_nowait()
         except queue.Empty:
@@ -163,7 +169,7 @@ class MeterApp:
             self.output.configure(state="disabled")
         self.poll_after = self.root.after(100, self.poll)
 
-    def open_pricing(self):
+    def open_pricing(self, review_pending=False):
         import webbrowser
         from .pricing import PricingStore, PUBLIC_URL
         store = PricingStore()
@@ -233,10 +239,28 @@ class MeterApp:
                 dialog = tk.Toplevel(window)
                 dialog.title("Review updated official pricing")
                 dialog.geometry("780x550")
-                ttk.Label(dialog, text="USD per million; order: uncached input, cached input, output.\nReview the official source for changed terms as well as rates.").pack(pady=8)
+                ttk.Label(dialog, text="These rates only estimate API costs; they do not change your subscription bill.\nCompare saved and detected rates below, then open the webpage to check its terms.\nAccepting clears the warning and preserves past pricing history. Leaving it open keeps your saved rates.", wraplength=740, justify="left").pack(pady=8)
                 details = tk.Text(dialog, wrap="word")
                 details.pack(fill="both", expand=True)
-                details.insert("end", json.dumps(changes, indent=2) if changes else "The source text changed, but the parsed Standard prices are unchanged. Review the source for changes to terms/context thresholds.")
+                lines = []
+                for model, versions in changes.items():
+                    lines.append(model)
+                    for name, entry in versions.items():
+                        lines.append("  " + ("Saved rates" if name == "saved" else "Detected rates"))
+                        if entry is None:
+                            lines.append("    Model not listed")
+                            continue
+                        for tier in ("short", "long"):
+                            if tier in entry:
+                                rates = ["not listed" if v is None else "$" + str(v) for v in entry[tier]]
+                                lines.append("    " + ("Standard context" if tier == "short" else "Long context") +
+                                             ": input " + rates[0] + "; cached input " + rates[1] + "; output " + rates[2])
+                        if "threshold" in entry:
+                            lines.append(f"    Long-context threshold: {entry['threshold']:,} input tokens")
+                    lines.append("")
+                details.insert("end", "USD per million tokens\n\n" + "\n".join(lines) if changes else
+                               "No tracked token prices changed.\n\nOpenAI changed other webpage content. Check the webpage for changes to pricing terms. "
+                               "If you are satisfied, choose Acknowledge page change. Your rates stay the same and previous history is preserved.")
                 details.configure(state="disabled")
                 ttk.Button(dialog, text="Open official source", command=lambda: webbrowser.open(PUBLIC_URL)).pack(pady=4)
                 def accept():
@@ -246,12 +270,15 @@ class MeterApp:
                         refresh()
                     except Exception as exc:
                         messagebox.showerror("Pricing update", str(exc), parent=dialog)
-                ttk.Button(dialog, text="Accept reviewed rates from now", command=accept).pack(pady=6)
+                ttk.Button(dialog, text="Use reviewed rates for future estimates" if changes else "Acknowledge page change", command=accept).pack(pady=6)
+                ttk.Button(dialog, text="Keep saved rates / decide later", command=dialog.destroy).pack(pady=4)
             except Exception as exc:
                 messagebox.showerror("Pricing review", str(exc), parent=window)
-        for label, action in (("Refresh report", refresh), ("Check official source", check), ("Review pricing update", review), ("Open official source", lambda: webbrowser.open(PUBLIC_URL))):
+        for label, action in (("Refresh report", refresh), ("Check official source", check), ("Review pricing change…", review), ("Open official source", lambda: webbrowser.open(PUBLIC_URL))):
             ttk.Button(actions, text=label, command=action).pack(side="left", padx=3)
         refresh()
+        if review_pending and store.status().get("state") == "changed":
+            review()
 
 
 def show_pricing_notice(root, review):
@@ -270,7 +297,7 @@ def show_pricing_notice(root, review):
     def open_review():
         dialog.destroy()
         review()
-    ttk.Button(actions, text="Rates and history…", command=open_review).pack(side="left", padx=4)
+    ttk.Button(actions, text="Review pricing change…", command=open_review).pack(side="left", padx=4)
     ttk.Button(actions, text="Official pricing page", command=lambda: webbrowser.open(PUBLIC_URL)).pack(side="left", padx=4)
     ttk.Button(actions, text="Close", command=dialog.destroy).pack(side="left", padx=4)
     dialog.lift()
