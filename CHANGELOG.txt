@@ -4,6 +4,21 @@ Entries are grouped by release date, newest first. Bundle dates identify the
 combined Windows application and C6 firmware release; application file versions
 are recorded separately.
 
+2026-11-13 — windows-c6-2026.11.13 (Windows 3.12.2.9)
+- Replace the vague pricing-page warning with an explanation of what changed,
+  what saved rates are used for, and how to review the update.
+- Add a visible Review pricing change button to the control panel. It opens
+  the comparison directly; the tray review action opens the same comparison.
+- Show readable saved and detected model prices instead of raw JSON, including
+  missing model entries and long-context thresholds.
+- Distinguish acknowledging a page-only change from accepting reviewed rates
+  for future estimates. Add an explicit Keep saved rates / decide later action.
+- Preserve pricing history and saved rates when opening or dismissing a review.
+  Explain that API cost estimates do not change the user's subscription bill.
+- Refresh wording for already-cached warnings and advance the update baseline.
+- Windows-only update: C6 firmware and the wire protocol are unchanged from
+  windows-c6-2026.11.12.1. No reflashing is needed.
+
 2026-11-12 — windows-c6-2026.11.12.1 (Windows 3.12.2.8)
 - Merge upstream fixes 2cdf2e8 and 30c2f66: correct Nixie weekly decimal
   rollers, compact-token rounding at unit boundaries and large-value text fitting.
