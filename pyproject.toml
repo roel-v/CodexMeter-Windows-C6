@@ -32,10 +32,10 @@ dependencies = [
 hardware = ["pillow>=11,<14"]
 
 [project.urls]
-Homepage = "https://github.com/tomatoeggs/CodexMeter"
-Repository = "https://github.com/tomatoeggs/CodexMeter.git"
-Issues = "https://github.com/tomatoeggs/CodexMeter/issues"
-Changelog = "https://github.com/tomatoeggs/CodexMeter/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/roel-v/CodexMeter-Companion"
+Repository = "https://github.com/roel-v/CodexMeter-Companion.git"
+Issues = "https://github.com/roel-v/CodexMeter-Companion/issues"
+Changelog = "https://github.com/roel-v/CodexMeter-Companion/blob/main/CHANGELOG.txt"
 
 [project.scripts]
 codexmeterd = "codexmeter.daemon:main"

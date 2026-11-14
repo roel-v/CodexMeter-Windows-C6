@@ -1,4 +1,4 @@
-# CodexMeter for Windows
+# CodexMeter Companion
 
 Keep your Codex quota, token usage and chat status on a small display beside your
 computer. The Windows companion runs in the system tray and sends updates over
@@ -13,7 +13,7 @@ Bluetooth to a **Waveshare C6**, a **Spotpear Ball**, or both.
   <tr><td colspan="2"><sub>Both displays running CodexMeter. The printed-case photo shows an earlier dashboard; current screens are shown below.</sub></td></tr>
 </table>
 
-**[Download the latest release](https://github.com/roel-v/CodexMeter-Windows-C6/releases/latest)** ·
+**[Download the latest release](https://github.com/roel-v/CodexMeter-Companion/releases/latest)** ·
 [Setup](README.windows.md) · [Ball guide](docs/spotpear-ball.md) · [Changelog](CHANGELOG.txt)
 
 This is an English Windows fork of
@@ -27,7 +27,7 @@ You need Windows 10/11 with Bluetooth LE, Codex installed and signed in, a
 supported display, and a USB data cable to flash its firmware.
 
 1. Download **CodexMeter.exe** and the firmware for your display from the
-   [latest release](https://github.com/roel-v/CodexMeter-Windows-C6/releases/latest).
+   [latest release](https://github.com/roel-v/CodexMeter-Companion/releases/latest).
 2. Follow the [Waveshare C6 setup](README.windows.md) or
    [Spotpear Ball setup](docs/spotpear-ball.md#build-and-flash) to flash the board.
 3. Run the companion, register your display in the control panel and start the
@@ -180,7 +180,7 @@ The original macOS and Waveshare S3 code is retained. The
 For source builds, use the [Windows build guide](README.windows.md). The scripts
 use D: for builds and caches and E: for retained bundles in the development setup;
 see [location configuration](README.windows.md#locations) when building elsewhere.
-The maintained branch is `windows-c6`; that historical name covers both displays.
+The maintained branch is `main`.
 
 Thanks to the upstream authors for the application, firmware and themes.
 The [MIT license](LICENSE) and original copyright are retained; see

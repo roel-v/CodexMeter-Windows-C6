@@ -15,10 +15,12 @@ from pathlib import Path
 from .persistence import atomic_write_json
 from .settings import APP_DIR
 
-REPOSITORY = "roel-v/CodexMeter-Windows-C6"
+REPOSITORY = "roel-v/CodexMeter-Companion"
+# Repository identity survives renames; do not replace this with a name-based URL.
+REPOSITORY_ID = 1432451927
 RELEASES_URL = f"https://github.com/{REPOSITORY}/releases"
-API_URL = f"https://api.github.com/repos/{REPOSITORY}/releases/latest"
-# Advance this baseline when cutting a new dated Windows/C6 bundle.
+API_URL = f"https://api.github.com/repositories/{REPOSITORY_ID}/releases/latest"
+# Keep the historical tag format so installed clients can recognize new releases.
 CURRENT_RELEASE = "windows-c6-2026.11.13.1"
 APP_VERSION = "3.12.3.0"
 _LOCK = threading.RLock()
@@ -27,7 +29,7 @@ _LOCK = threading.RLock()
 def release_key(tag):
     match = re.fullmatch(r"windows-c6-(\d{4})\.(\d{2})\.(\d{2})(?:\.(\d+))?", tag or "")
     if not match:
-        raise ValueError("Unrecognized Windows/C6 release tag")
+        raise ValueError("Unrecognized CodexMeter release tag")
     year, month, day = map(int, match.groups()[:3])
     dt.date(year, month, day)
     return year, month, day, int(match[4] or 0)
@@ -110,8 +112,8 @@ class UpdateStore:
                     tag = release["tag_name"]
                     newer = release_key(tag) > release_key(self.current)
                     state.update(state="available" if newer else "current", tag=tag,
-                                 message=(f"A newer Windows/C6 release is available: {tag}."
-                                          if newer else "No newer Windows/C6 release is available."))
+                                 message=(f"A newer CodexMeter Companion release is available: {tag}."
+                                          if newer else "No newer CodexMeter Companion release is available."))
             except Exception as exc:
                 state.update(state="error", message=f"Could not check GitHub releases. Try again later. ({type(exc).__name__})")
             atomic_write_json(self.path, state)

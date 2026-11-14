@@ -105,3 +105,19 @@ def test_default_baseline_does_not_offer_its_own_release(tmp_path):
     from codexmeter.updates import CURRENT_RELEASE
     store = UpdateStore(tmp_path / 'current.json')
     assert store.check(fetch=lambda: release(CURRENT_RELEASE))['state'] == 'current'
+
+def test_release_fetch_uses_repository_identity_and_rejects_redirects(monkeypatch):
+    from codexmeter import updates
+    from io import BytesIO
+    requests = []
+    class Response(BytesIO):
+        url = 'https://api.github.com/repositories/1432451927/releases/latest'
+    def open_response(request, timeout):
+        requests.append(request.full_url)
+        return Response(json.dumps(release()).encode())
+    monkeypatch.setattr(updates.urllib.request, 'urlopen', open_response)
+    assert updates.fetch_release()['tag_name'] == release()['tag_name']
+    assert requests == [Response.url]
+    Response.url = 'https://example.com/releases/latest'
+    with pytest.raises(ValueError, match='redirect'):
+        updates.fetch_release()
