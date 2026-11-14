@@ -1,9 +1,15 @@
-CodexMeter Windows/C6 changelog
+CodexMeter Companion changelog
 
-Entries are grouped by release date, newest first. Bundle dates identify the
-combined Windows application and C6 firmware release; application file versions
-are recorded separately.
+Entries are grouped by release date, newest first. Application versions are
+recorded separately; firmware changes are noted where applicable.
 
+2026-11-14 — windows-c6-2026.11.14 (Windows 3.12.3.1)
+- Fix release checks after the repository rename to CodexMeter-Companion by
+  querying GitHub's stable repository ID instead of the old repository name.
+- Update release links, project branding and package metadata for the renamed repo.
+- Restore the printed C6 case photo and present both displays in the README.
+- Desktop-only update. Existing C6 and Ball firmware remains compatible;
+  no firmware flashing is required.
 2026-11-13 — windows-c6-2026.11.13.1 (Windows 3.12.3.0)
 - Add Spotpear Ball V2 firmware: quota/tasks, Today and seven-day detail pages,
   bidirectional swipe/BOOT navigation, retained page, waiting view and alerts.
